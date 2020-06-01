@@ -5,6 +5,7 @@
 package kotlinx.coroutines.flow
 
 import kotlinx.atomicfu.*
+import kotlinx.atomicfu.locks.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.*
 import kotlinx.coroutines.flow.internal.*
