@@ -54,6 +54,7 @@ buildscript {
     }
 
     repositories {
+        mavenLocal()
         jcenter()
         maven {
             url "https://kotlin.bintray.com/kotlinx"
@@ -71,6 +72,7 @@ buildscript {
                 password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY') ?: ""
             }
         }
+        maven { url "https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev" }
         maven { url "https://kotlin.bintray.com/kotlin-eap" }
         maven { url "https://jetbrains.bintray.com/kotlin-native-dependencies" }
         maven { url "https://plugins.gradle.org/m2/" }
@@ -168,7 +170,9 @@ allprojects {
                 password = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY') ?: ""
             }
         }
+        maven { url "https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev" }
         maven { url "https://kotlin.bintray.com/kotlin-eap" }
+        maven { url "https://maven.pkg.jetbrains.space/kotlin/p/kotlin/dev" }
         maven {
             url "https://kotlin.bintray.com/kotlinx"
             credentials {
