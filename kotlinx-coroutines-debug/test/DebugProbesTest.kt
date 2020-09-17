@@ -34,6 +34,7 @@ class DebugProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testAsyncWithProbes() = DebugProbes.withDebugProbes {
         DebugProbes.sanitizeStackTraces = false
         runTest {
@@ -65,6 +66,7 @@ class DebugProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testAsyncWithSanitizedProbes() = DebugProbes.withDebugProbes {
         DebugProbes.sanitizeStackTraces = true
         runTest {

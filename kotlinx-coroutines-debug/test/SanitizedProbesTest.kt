@@ -76,6 +76,7 @@ class SanitizedProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testSelectBuilder() = runTest {
         val selector = launchSelector()
         expect(1)
