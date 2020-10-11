@@ -13,13 +13,13 @@ import kotlin.native.concurrent.*
 private typealias Node = LockFreeLinkedListNode
 
 @PublishedApi
-internal const val UNDECIDED = 0
+internal const val UNDECIDED: Int = 0
 
 @PublishedApi
-internal const val SUCCESS = 1
+internal const val SUCCESS: Int = 1
 
 @PublishedApi
-internal const val FAILURE = 2
+internal const val FAILURE: Int = 2
 
 @PublishedApi
 @SharedImmutable
