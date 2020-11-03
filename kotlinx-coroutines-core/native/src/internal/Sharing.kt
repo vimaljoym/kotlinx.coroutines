@@ -86,19 +86,19 @@ internal actual inline fun disposeContinuation(cont: () -> Continuation<*>) {
     (cont() as ShareableContinuation<*>).disposeRef()
 }
 
-internal actual fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, useMode: Int) {
+internal actual fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, undispatched: Boolean) {
     if (delegate is ShareableContinuation) {
         val thread = delegate.ownerThreadOrNull ?: delegate.wasUsed()
         if (currentThread() == thread) {
-            resumeImpl(delegate.useRef(), useMode)
+            resume(delegate.useRef(), undispatched)
         } else {
             thread.execute {
-                resumeImpl(delegate.useRef(), useMode)
+                resume(delegate.useRef(), undispatched)
             }
         }
         return
     }
-    resumeImpl(delegate, useMode)
+    resume(delegate, undispatched)
 }
 
 internal actual fun isReuseSupportedInPlatform() = false

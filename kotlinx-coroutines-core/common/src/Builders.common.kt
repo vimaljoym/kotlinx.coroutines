@@ -175,9 +175,10 @@ internal fun <T, R> startCoroutineImpl(
     start: CoroutineStart,
     receiver: R,
     completion: Continuation<T>,
+    onCancellation: ((cause: Throwable) -> Unit)?,
     block: suspend R.() -> T
 ) = when (start) {
-    CoroutineStart.DEFAULT -> block.startCoroutineCancellable(receiver, completion)
+    CoroutineStart.DEFAULT -> block.startCoroutineCancellable(receiver, completion, onCancellation)
     CoroutineStart.ATOMIC -> block.startCoroutine(receiver, completion)
     CoroutineStart.UNDISPATCHED -> block.startCoroutineUndispatched(receiver, completion)
     CoroutineStart.LAZY -> Unit // will start lazily
@@ -190,6 +191,7 @@ internal expect fun <T, R> startCoroutine(
     start: CoroutineStart,
     receiver: R,
     completion: Continuation<T>,
+    onCancellation: ((cause: Throwable) -> Unit)? = null,
     block: suspend R.() -> T
 )
 

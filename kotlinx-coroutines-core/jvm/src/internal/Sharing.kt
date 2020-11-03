@@ -64,8 +64,8 @@ internal actual inline fun disposeContinuation(cont: () -> Continuation<*>) {}
 
 @InlineOnly
 @Suppress("NOTHING_TO_INLINE") // Save an entry on call stack
-internal actual inline fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, useMode: Int) =
-    resumeImpl(delegate, useMode)
+internal actual inline fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, undispatched: Boolean) =
+    resume(delegate, undispatched)
 
 @InlineOnly
 @Suppress("NOTHING_TO_INLINE") // Should be NOP

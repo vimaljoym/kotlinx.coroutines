@@ -466,7 +466,7 @@ internal abstract class AbstractSendChannel<E>(
             select.trySelectOther(otherOp) as Symbol? // must return symbol
 
         override fun completeResumeSend() {
-            startCoroutine(CoroutineStart.DEFAULT, channel, select.completion, block)
+            startCoroutine(CoroutineStart.DEFAULT, channel, select.completion, block = block)
         }
 
         override fun dispose() { // invoked on select completion
@@ -1007,9 +1007,9 @@ internal abstract class AbstractChannel<E>(
             if (!select.trySelect()) return
             when (receiveMode) {
                 RECEIVE_THROWS_ON_CLOSE -> select.resumeSelectWithException(closed.receiveException)
-                RECEIVE_RESULT -> startCoroutine(CoroutineStart.DEFAULT, ValueOrClosed.closed<R>(closed.closeCause), select.completion, block)
+                RECEIVE_RESULT -> startCoroutine(CoroutineStart.DEFAULT, ValueOrClosed.closed<R>(closed.closeCause), select.completion, block = block)
                 RECEIVE_NULL_ON_CLOSE -> if (closed.closeCause == null) {
-                    startCoroutine(CoroutineStart.DEFAULT, null, select.completion, block)
+                    startCoroutine(CoroutineStart.DEFAULT, null, select.completion, block = block)
                 } else {
                     select.resumeSelectWithException(closed.receiveException)
                 }
@@ -1091,12 +1091,12 @@ internal interface ReceiveOrClosed<in E> {
  * Represents sender for a specific element.
  */
 @Suppress("UNCHECKED_CAST")
-internal class SendElement(
+internal open class SendElement(
     override val pollResult: Any?,
     cont: CancellableContinuation<Unit>
 ) : Send() {
     private val _cont = atomic<CancellableContinuation<Unit>?>(cont)
-    protected val cont get() = cont.value!!
+    protected val cont get() = _cont.value!!
 
     override fun tryResumeSend(otherOp: PrepareOp?): Symbol? {
         val token = _cont.value?.tryResume(Unit, otherOp?.desc) ?: return null
@@ -1114,7 +1114,7 @@ internal class SendElementWithUndeliveredHandler<E>(
     pollResult: E,
     cont: CancellableContinuation<Unit>,
     @JvmField val onUndeliveredElement: OnUndeliveredElement<E>
-) : SendElement<E>(pollResult, cont) {
+) : SendElement(pollResult, cont) {
     override fun remove(): Boolean {
         if (!super.remove()) return false
         // if the node was successfully removed (meaning it was added but was not received) then we have undelivered element
@@ -1123,7 +1123,7 @@ internal class SendElementWithUndeliveredHandler<E>(
     }
 
     override fun undeliveredElement() {
-        onUndeliveredElement.callUndeliveredElement(pollResult, cont.context)
+        onUndeliveredElement.callUndeliveredElement(pollResult as E, cont.context)
     }
 }
 /**
