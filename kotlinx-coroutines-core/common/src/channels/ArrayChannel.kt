@@ -128,7 +128,7 @@ internal open class ArrayChannel<E>(
     // Result is `OFFER_SUCCESS | OFFER_FAILED | null`
     private fun updateBufferSize(currentSize: Int): Symbol? {
         if (currentSize < capacity) {
-            size.value = currentSize + 1 // tentatively put it into the buffer
+            state.size = currentSize + 1 // tentatively put it into the buffer
             return null // proceed
         }
         // buffer is full
@@ -142,28 +142,15 @@ internal open class ArrayChannel<E>(
     // Guarded by lock
     private fun enqueueElement(currentSize: Int, element: E) {
         if (currentSize < capacity) {
-            ensureCapacity(currentSize)
-            buffer[(head + currentSize) % buffer.size] = element // actually queue element
+            state.ensureCapacity(currentSize, capacity)
+            state.setBufferAt((state.head + currentSize) % state.bufferSize, element) // actually queue element
         } else {
             // buffer is full
             assert { onBufferOverflow == BufferOverflow.DROP_OLDEST } // the only way we can get here
-            buffer[head % buffer.size] = null // drop oldest element
-            buffer[(head + currentSize) % buffer.size] = element // actually queue element
-            head = (head + 1) % buffer.size
-        }
-    }
-
-    // Guarded by lock
-    private fun ensureCapacity(currentSize: Int) {
-        if (currentSize >= buffer.size) {
-            val newSize = min(buffer.size * 2, capacity)
-            val newBuffer = arrayOfNulls<Any?>(newSize)
-            for (i in 0 until currentSize) {
-                newBuffer[i] = buffer[(head + i) % buffer.size]
-            }
-            newBuffer.fill(EMPTY, currentSize, newSize)
-            buffer = newBuffer
-            head = 0
+            state.setBufferAt(state.head % state.bufferSize, null) // drop oldest element
+            state.setBufferAt((state.head + currentSize) % state.bufferSize, element) // actually queue element
+            // actually queue element
+            state.head = (state.head + 1) % state.bufferSize
         }
     }
 
@@ -278,7 +265,7 @@ internal open class ArrayChannel<E>(
         // clear buffer first, but do not wait for it in helpers
         val onUndeliveredElement = onUndeliveredElement
         var undeliveredElementException: UndeliveredElementException? = null // first cancel exception, others suppressed
-        lock.withLock {
+        state.withLock {
             repeat(state.size) {
                 val value = state.getBufferAt(state.head)
                 if (onUndeliveredElement != null && value !== EMPTY) {

@@ -34,8 +34,8 @@ internal object DefaultDispatcher : CoroutineDispatcher(), Delay, ThreadBoundInt
         delegate.dispatch(context, block)
     override fun scheduleResumeAfterDelay(timeMillis: Long, continuation: CancellableContinuation<Unit>) =
         (delegate as Delay).scheduleResumeAfterDelay(timeMillis, continuation)
-    override fun invokeOnTimeout(timeMillis: Long, block: Runnable): DisposableHandle =
-        (delegate as Delay).invokeOnTimeout(timeMillis, block)
+    override fun invokeOnTimeout(timeMillis: Long, block: Runnable, context: CoroutineContext): DisposableHandle =
+        (delegate as Delay).invokeOnTimeout(timeMillis, block, context)
     override fun toString(): String =
         delegate.toString()
 

@@ -49,8 +49,8 @@ internal actual inline fun <T> Continuation<T>.shareableInterceptedResumeWith(re
 internal actual inline fun disposeContinuation(cont: () -> Continuation<*>) {}
 
 @Suppress("NOTHING_TO_INLINE") // Save an entry on call stack
-internal actual inline fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, useMode: Int) =
-    resumeImpl(delegate, useMode)
+internal actual inline fun <T> CancellableContinuationImpl<T>.shareableResume(delegate: Continuation<T>, undispatched: Boolean) =
+    resume(delegate, undispatched)
 
 @Suppress("NOTHING_TO_INLINE") // Should be NOP
 internal actual inline fun <T, R> (suspend (T) -> R).asShareable(): suspend (T) -> R = this

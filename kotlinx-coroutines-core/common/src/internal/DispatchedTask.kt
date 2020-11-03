@@ -164,8 +164,7 @@ internal fun <T> CancellableContinuationImpl<T>.dispatch(mode: Int) {
     } else {
         // delegate is coming from 3rd-party interceptor implementation (and does not support cancellation)
         // or undispatched mode was requested
-        // resume(delegate, undispatched) TODO actual
-        shareableResume(delegate, mode)
+        shareableResume(delegate, undispatched)
     }
 }
 

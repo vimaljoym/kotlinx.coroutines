@@ -22,6 +22,7 @@ class WorkerTest : TestBase() {
             runBlocking {
                 launch { }.join()
                 delay(1)
+                println("Done")
             }
         }.result
         worker.requestTermination()

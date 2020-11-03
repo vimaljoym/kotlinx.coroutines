@@ -46,7 +46,7 @@ private class DarwinMainDispatcher(
         continuation.disposeOnCancellation(timer)
     }
 
-    override fun invokeOnTimeout(timeMillis: Long, block: Runnable): DisposableHandle {
+    override fun invokeOnTimeout(timeMillis: Long, block: Runnable, context: CoroutineContext): DisposableHandle {
         val timer = Timer()
         val timerBlock: TimerBlock = {
             timer.dispose()

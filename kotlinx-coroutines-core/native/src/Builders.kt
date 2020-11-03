@@ -93,20 +93,22 @@ internal actual fun <T, R> startCoroutine(
     start: CoroutineStart,
     receiver: R,
     completion: Continuation<T>,
+    onCancellation: ((cause: Throwable) -> Unit)?,
     block: suspend R.() -> T
 ) =
-    startCoroutine(start, receiver, completion, block) {}
+    startCoroutine(start, receiver, completion, onCancellation, block) {}
 
 // initParentJob + startCoroutine
 internal actual fun <T, R> startAbstractCoroutine(
     start: CoroutineStart,
     receiver: R,
     coroutine: AbstractCoroutine<T>,
+
     block: suspend R.() -> T
 ) {
     // See https://github.com/Kotlin/kotlinx.coroutines/issues/2064
     // We shall do initParentJob only after freezing the block
-    startCoroutine(start, receiver, coroutine, block) {
+    startCoroutine(start, receiver, coroutine, null, block) {
         coroutine.initParentJob()
     }
 }
@@ -115,6 +117,7 @@ private fun <T, R> startCoroutine(
     start: CoroutineStart,
     receiver: R,
     completion: Continuation<T>,
+    onCancellation: ((cause: Throwable) -> Unit)?,
     block: suspend R.() -> T,
     initParentJobIfNeeded: () -> Unit
 ) {
@@ -128,13 +131,13 @@ private fun <T, R> startCoroutine(
         initParentJobIfNeeded() // only initParentJob here if needed
         if (start != CoroutineStart.LAZY) {
             newThread.execute {
-                startCoroutineImpl(start, receiver, completion, block)
+                startCoroutineImpl(start, receiver, completion, onCancellation, block)
             }
         }
         return
     }
     initParentJobIfNeeded()
-    startCoroutineImpl(start, receiver, completion, block)
+    startCoroutineImpl(start, receiver, completion, onCancellation, block)
 }
 
 private fun ContinuationInterceptor?.thread(): Thread = when (this) {
@@ -156,4 +159,4 @@ internal actual fun <T, R> startLazyCoroutine(
     coroutine: AbstractCoroutine<T>,
     receiver: R
 ) =
-    startCoroutine(CoroutineStart.DEFAULT, receiver, coroutine, saved as suspend R.() -> T)
+    startCoroutine(CoroutineStart.DEFAULT, receiver, coroutine, null, saved as suspend R.() -> T)

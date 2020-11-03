@@ -52,25 +52,25 @@ class FreezingTest : TestBase() {
         assertTrue(job.isCancelled)
     }
 
-    @Test
-    fun testStateFlowValue() = runTest {
-        val stateFlow = MutableStateFlow(0)
-        stateFlow.freeze()
-        stateFlow.value = 1
-    }
-
-    @Test
-    @OptIn(ExperimentalStdlibApi::class)
-    fun testStateFlowCollector() = runTest {
-        val stateFlow = MutableStateFlow(0)
-        stateFlow.freeze()
-        repeat(10) {
-            launch {
-                stateFlow.collect {
-                    if (it == 42) cancel()
-                }
-            }
-        }
-        stateFlow.value = 42
-    }
+//    @Test
+//    fun testStateFlowValue() = runTest {
+//        val stateFlow = MutableStateFlow(0)
+//        stateFlow.freeze()
+//        stateFlow.value = 1
+//    }
+//
+//    @Test
+//    @OptIn(ExperimentalStdlibApi::class)
+//    fun testStateFlowCollector() = runTest {
+//        val stateFlow = MutableStateFlow(0)
+//        stateFlow.freeze()
+//        repeat(10) {
+//            launch {
+//                stateFlow.collect {
+//                    if (it == 42) cancel()
+//                }
+//            }
+//        }
+//        stateFlow.value = 42
+//    }
 }

@@ -127,7 +127,7 @@ class WorkerDispatcherTest : TestBase() {
     @Test
     fun testChannelIterator() = runTest {
         expect(1)
-        val channel = RendezvousChannel<Int>()
+        val channel = RendezvousChannel<Int>(null)
         launch(dispatcher) {
             channel.send(1)
             channel.send(2)

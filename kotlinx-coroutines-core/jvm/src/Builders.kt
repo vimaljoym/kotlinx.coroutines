@@ -106,9 +106,10 @@ internal actual inline fun <T, R> startCoroutine(
     start: CoroutineStart,
     receiver: R,
     completion: Continuation<T>,
+    noinline onCancellation: ((cause: Throwable) -> Unit)?,
     noinline block: suspend R.() -> T
 ) =
-    startCoroutineImpl(start, receiver, completion, block)
+    startCoroutineImpl(start, receiver, completion, onCancellation, block)
 
 @Suppress("NOTHING_TO_INLINE") // Save an entry on call stack
 internal actual inline fun <T, R> startAbstractCoroutine(
@@ -118,7 +119,7 @@ internal actual inline fun <T, R> startAbstractCoroutine(
     noinline block: suspend R.() -> T
 ) {
     coroutine.initParentJob()
-    startCoroutineImpl(start, receiver, coroutine, block)
+    startCoroutineImpl(start, receiver, coroutine, null, block)
 }
 
 @Suppress("NOTHING_TO_INLINE") // Save an entry on call stack

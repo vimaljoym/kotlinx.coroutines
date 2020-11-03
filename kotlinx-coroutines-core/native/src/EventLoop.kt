@@ -49,9 +49,9 @@ internal class ShareableEventLoop(
         ref.get().scheduleResumeAfterDelay(timeMillis, continuation)
     }
 
-    override fun invokeOnTimeout(timeMillis: Long, block: Runnable): DisposableHandle {
+    override fun invokeOnTimeout(timeMillis: Long, block: Runnable, context: CoroutineContext): DisposableHandle {
         checkCurrentThread()
-        return ref.get().invokeOnTimeout(timeMillis, block)
+        return ref.get().invokeOnTimeout(timeMillis, block, context)
     }
 
     override fun dispatch(context: CoroutineContext, block: Runnable) {
