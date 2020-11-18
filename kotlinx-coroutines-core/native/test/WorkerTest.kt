@@ -25,7 +25,6 @@ class WorkerTest : TestBase() {
                 println("Done")
             }
         }.result
-        worker.requestTermination()
     }
 
     @Test
@@ -37,6 +36,5 @@ class WorkerTest : TestBase() {
                 }.join()
             }
         }.result
-        worker.requestTermination()
     }
 }
