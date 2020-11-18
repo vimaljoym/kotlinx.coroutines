@@ -939,8 +939,9 @@ internal abstract class AbstractChannel<E>(
         receiveMode: Int,
         @JvmField val onUndeliveredElement: OnUndeliveredElement<E>
     ) : ReceiveElement<E>(cont, receiveMode) {
+        private val context = cont.context
         override fun resumeOnCancellationFun(value: E): ((Throwable) -> Unit)? =
-            onUndeliveredElement.bindCancellationFun(value, cont.context)
+            onUndeliveredElement.bindCancellationFun(value, context)
     }
 
     private open class ReceiveHasNext<E>(
@@ -948,7 +949,7 @@ internal abstract class AbstractChannel<E>(
         cont: CancellableContinuation<Boolean>
     ) : Receive<E>() {
         private val _cont = atomic<CancellableContinuation<Boolean>?>(cont)
-        protected val cont get() = _cont.value!!
+        private val context = cont.context
 
         override fun tryResumeReceive(value: E, otherOp: PrepareOp?): Symbol? {
             val token = _cont.value?.tryResume(true, otherOp?.desc, resumeOnCancellationFun(value))
@@ -982,7 +983,7 @@ internal abstract class AbstractChannel<E>(
         }
 
         override fun resumeOnCancellationFun(value: E): ((Throwable) -> Unit)? =
-            iterator.channel.onUndeliveredElement?.bindCancellationFun(value, cont.context)
+            iterator.channel.onUndeliveredElement?.bindCancellationFun(value, context)
 
         override fun toString(): String = "ReceiveHasNext@$hexAddress"
     }
@@ -1115,6 +1116,8 @@ internal class SendElementWithUndeliveredHandler<E>(
     cont: CancellableContinuation<Unit>,
     @JvmField val onUndeliveredElement: OnUndeliveredElement<E>
 ) : SendElement(pollResult, cont) {
+    private val context = cont.context
+
     override fun remove(): Boolean {
         if (!super.remove()) return false
         // if the node was successfully removed (meaning it was added but was not received) then we have undelivered element
@@ -1123,7 +1126,7 @@ internal class SendElementWithUndeliveredHandler<E>(
     }
 
     override fun undeliveredElement() {
-        onUndeliveredElement.callUndeliveredElement(pollResult as E, cont.context)
+        onUndeliveredElement.callUndeliveredElement(pollResult as E, context)
     }
 }
 /**
