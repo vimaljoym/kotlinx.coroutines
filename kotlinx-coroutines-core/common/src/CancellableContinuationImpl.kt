@@ -502,7 +502,10 @@ internal open class CancellableContinuationImpl<in T>(
     @Suppress("UNCHECKED_CAST")
     override fun <T> getSuccessfulResult(state: Any?): T =
         when (state) {
-            is CompletedContinuation -> state.result as T
+            is CompletedContinuation -> {
+                state.releaseHandlers()
+                state.result as T
+            }
             else -> state as T
         }
 
@@ -552,17 +555,37 @@ private class InvokeOnCancel( // Clashes with InvokeOnCancellation
 }
 
 // Completed with additional metadata
-private data class CompletedContinuation(
+private class CompletedContinuation(
     @JvmField val result: Any?,
-    @JvmField val cancelHandler: CancelHandler? = null, // installed via invokeOnCancellation
-    @JvmField val onCancellation: ((cause: Throwable) -> Unit)? = null, // installed via resume block
+    cancelHandler: CancelHandler? = null, // installed via invokeOnCancellation
+    onCancellation: ((cause: Throwable) -> Unit)? = null, // installed via resume block
     @JvmField val idempotentResume: Any? = null,
     @JvmField val cancelCause: Throwable? = null
 ) {
+    private val _cancelHandler = atomic(cancelHandler)
+    private val _onCancellation = atomic(onCancellation)
+
+    val cancelHandler: CancelHandler? get() = _cancelHandler.value
+    val onCancellation: ((cause: Throwable) -> Unit)? get() = _onCancellation.value
     val cancelled: Boolean get() = cancelCause != null
+
+    fun releaseHandlers() {
+        _cancelHandler.value = null
+        _onCancellation.value = null
+    }
 
     fun invokeHandlers(cont: CancellableContinuationImpl<*>, cause: Throwable) {
         cancelHandler?.let { cont.callCancelHandler(it, cause) }
         onCancellation?.let { cont.callOnCancellation(it, cause) }
+        releaseHandlers()
     }
+
+    fun copy(
+        result: Any? = this.result,
+        cancelHandler: CancelHandler? = this.cancelHandler,
+        onCancellation: ((cause: Throwable) -> Unit)? = this.onCancellation,
+        idempotentResume: Any? = this.idempotentResume,
+        cancelCause: Throwable? = this.cancelCause
+    ) =
+        CompletedContinuation(result, cancelHandler, onCancellation, idempotentResume, cancelCause)
 }
