@@ -6,9 +6,9 @@ package kotlinx.coroutines.internal
 
 import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
-import kotlinx.coroutines.internal.SegmentQueueSynchronizer.ResumeMode.ASYNC
-import kotlinx.coroutines.internal.SegmentQueueSynchronizer.ResumeMode.SYNC
+import kotlinx.coroutines.internal.SegmentQueueSynchronizer.*
 import kotlinx.coroutines.internal.SegmentQueueSynchronizer.CancellationMode.*
+import kotlinx.coroutines.internal.SegmentQueueSynchronizer.ResumeMode.*
 import kotlinx.coroutines.sync.*
 import kotlin.coroutines.*
 import kotlin.math.*
@@ -16,46 +16,48 @@ import kotlin.native.concurrent.*
 
 /**
  * [SegmentQueueSynchronizer] is an abstraction for implementing _fair_ synchronization
- * and communication primitives. It maintains a FIFO queue of waiting requests and is
- * provided with two main functions:
- * + [suspend] that stores the specified waiter into the queue, and
- * + [resume] that tries to retrieve and resume the first waiter with the specified value.
+ * and communication primitives. It maintains a FIFO queue of waiting requests and
+ * provides two main functions:
+ * - [suspend] that stores the specified waiter in the queue, and
+ * - [resume] that tries to retrieve and resume the first waiter,
+ *            passing the specified value to it.
  *
- * One may consider this abstraction as an infinite array with two counters that reference the next cells
- * for enqueueing a continuation in [suspend] and for retrieving it in [resume]. To be short, when
+ * One may consider this abstraction an infinite array with two counters that reference the next cells
+ * for enqueueing a continuation in [suspend] and for retrieving it in [resume]. In short, when
  * [suspend] is invoked, it increments the corresponding counter via fast `Fetch-And-Add` and stores the
- * continuation into the cell. At the same time, [resume] increments its own counter and comes to the
+ * continuation in the cell. Likewise, [resume] increments its own counter and comes to the
  * corresponding cell.
  *
- * A typical implementation via [SegmentQueueSynchronizer] performs some synchronization at first,
- * (e.g., [Semaphore] modifies the number of available permits), and invokes [suspend] or [resume]
- * after that. Following this pattern, it is possible in a concurrent environment that [resume]
+ * A typical implementation via [SegmentQueueSynchronizer] performs some synchronization at first
+ * (e.g., [Semaphore] modifies the number of available permits) and invokes [suspend] or [resume]
+ * after that. Note that it is usually possible in a concurrent environment that [resume]
  * is executed before [suspend] (similarly to the race between `park` and `unpark` for threads),
- * so that [resume] comes to a cell in the empty state. This race can be solved with two [strategies][ResumeMode]:
- * [asynchronous][ASYNC] and [synchronous][SYNC]. In the [asynchronous][ASYNC] mode, [resume] puts
- * the value into the cell if it is still empty and finishes immediately; this way, the following [suspend] comes
- * to this cell and simply grabs the element without suspension. At the same time, in the [synchronous][SYNC] mode,
+ * so that [resume] comes to a cell which is still in the empty state. This race can be solved with two [strategies][ResumeMode]:
+ * [asynchronous][ASYNC] and [synchronous][SYNC]. In the [asynchronous][ASYNC] mode, [resume] performs an elimination by
+ * putting the value into the cell if it is still empty and finishes immediately; this way, the corresponding [suspend] comes
+ * to this cell and simply grabs the element without suspension. On the other hand, in the [synchronous][SYNC] mode,
  * [resume] waits in a bounded spin-loop cycle until the put element is taken by a concurrent [suspend],
- * marking the cell as broken if it is not taken after the spin-loop is finished. In this case, both the current
- * [resume] and the [suspend] that comes to this broken cell fail and the corresponding operations on the data
+ * marking the cell as broken if the element is not taken during the spin-loop. In this case, both
+ * [resume] and [suspend] that come to this broken cell fail and the corresponding operations on the data
  * structure are typically restarted from the beginning.
  *
  * Since [suspend] can store [CancellableContinuation]-s, it is possible for [resume] to fail if the
  * continuation is already cancelled. In this case, most of the algorithms retry the whole operation.
- * However, if there are many consecutive cancelled waiters, it seems more efficient to skip them
+ * When many consecutive cancelled waiters are stored in [SegmentQueueSynchronizer], it seems more efficient to skip them
  * somehow. Thus, there are different [cancellation modes][cancellationMode] that can be used.
- * In the simple mode ([SIMPLE]), which is used by default, [resume] simply fails on cancelled waiters as
- * described above, while in smart modes ([SMART_SYNC] and [SMART_ASYNC]) [resume] skips cells in the
+ * In the simple mode ([SIMPLE]), which is used by default, [resume] simply fails on a cancelled waiter as
+ * described above, so that it is guaranteed that it can process at most one cell,
+ * while in smart modes ([SMART_SYNC] and [SMART_ASYNC]) [resume] skips cells in the
  * [cancelled][CANCELLED] state. However, if cancellation happens concurrently with [resume], it can be illegal
  * to simply skip the cell and resume the next waiter, e.g., if this cancelled waiter is the last one.
  * Thus, it is possible for [SegmentQueueSynchronizer] to refuse this [resume]. In order to support this logic,
  * users should implement  [onCancellation] function, which returns `true` if the cell can be
  * moved to the [cancelled][CANCELLED] state, or `false` if the [resume] that comes to this cell
- * should be refused. In the last case, [tryReturnRefusedValue] is invoked, so that the value
- * can be put back to the data structure. However, it is possible for [tryReturnRefusedValue] to
- * fail, and [returnValue] is called in this case. Typically, this [returnValue] function coincide
- * with the one that resumes waiters (e.g., [release][Semaphore.release] in [Semaphore]). The difference
- * between [SMART_SYNC] and [SMART_ASYNC] modes is that in the first one the [resume] that comes to the
+ * should be refused. In the latter case, the [resume] that comes to this cell refuses its value by
+ * invoking [tryReturnRefusedValue] to return the value back to the data structure. However, it is possible for
+ * [tryReturnRefusedValue] to fail, and [returnValue] is called in this case. Typically, this [returnValue] function
+ * coincides with the one that resumes waiters (e.g., [release][Semaphore.release] in [Semaphore]). The difference
+ * between [SMART_SYNC] and [SMART_ASYNC] modes is that in [SMART_SYNC] mode a [resume] that comes to a
  * cell with cancelled waiter waits in a spin-loop until the cell is marked either with [CANCELLED]
  * or [REFUSE] mark, while in [SMART_ASYNC] mode it replaces the cancelled waiter with the value of
  * the resumption and finishes, so that the cancellation handler completes this [resume] eventually.
@@ -71,28 +73,28 @@ import kotlin.native.concurrent.*
  *     |                                     | The continuation
  *     | `resume` comes to                   | is cancelled.
  *     | the cell before                     |
- *     | `suspend` and puts                  V                                                                      ( THE CORRESPONDING `resume` SHOULD BE   )
- *     | the element into           +-----------------+    The concurrent `resume` should be refused,    +--------+ ( REFUSED AND `tryReturnRefusedValue` OR )
- *     | the cell, waiting          | cont: cancelled | -----------------------------------------------> | REFUSE | ( `returnValue` IF IT FAILS IS USED TO   )
- *     | for `suspend` in           +-----------------+      `onCancellation` has returned `false`.      +--------+ ( RETURN THE VALUE BACK TO THE ORIGINAL  )
- *     | SYNC mode.                          |         \                                                     ^      ( SYNCHRONIZATION PRIMITIVE              )
+ *     | `suspend` and puts                  V                                                                      ( THE CORRESPONDING `resume` SHOULD BE    )
+ *     | the element into               +-----------------+    The concurrent `resume` should be refused,    +--------+ ( REFUSED AND `tryReturnRefusedValue`, OR )
+ *     | the cell, waiting for          | cont: cancelled | -----------------------------------------------> | REFUSE | ( `returnValue` IF IT FAILS, IS USED TO   )
+ *     | `suspend` if the resume        +-----------------+        `onCancellation` returned `false`.        +--------+ ( RETURN THE VALUE BACK TO THE OUTER      )
+ *     | mode is `SYNC`.                     |         \                                                     ^      ( SYNCHRONIZATION PRIMITIVE               )
  *     |                                     |          \                                                    |
  *     |        Mark the cell as `CANCELLED` |           \                                                   |
- *     |         if the cancellation mode is |            \  `resume` delegates its completing to            | `onCancellation` returned `false,
+ *     |         if the cancellation mode is |            \  `resume` delegates its completion to            | `onCancellation` returned `false,
  *     |        `SIMPLE` or `onCancellation` |             \   the concurrent cancellation handler if        | mark the state accordingly and
- *     |                has returned `true`. |              \   `SMART_ASYNC` cancellation mode is used.     | complete the hung `resume`.
+ *     |                    returned `true`. |              \   `SMART_ASYNC` cancellation mode is used.     | complete the hung `resume`.
  *     |                                     |               +------------------------------------------+    |
  *     |                                     |                                                           \   |
  *     |    ( THE CONTINUATION IS    )       V                                                            V  |
  *     |    ( CANCELLED AND `resume` ) +-----------+                                                     +-------+
- *     |    ( EITHER FAILS IN THE    ) | CANCELLED | <-------------------------------------------------- | value |
- *     |    ( SIMPLE CANCELLATION    ) +-----------+   Mark the cell as `CANCELLED` if `onCancellation`  +-------+
- *     |    ( MODE OR SKIPS THIS     )              returned true, complete the hung `resume` accordingly.
- *     |    ( CELL IN THE SMART ONE  )
+ *     |    ( FAILS IN THE SIMPLE    ) | CANCELLED | <-------------------------------------------------- | value |
+ *     |    ( CANCELLATION MODE OR   ) +-----------+   Mark the cell as `CANCELLED` if `onCancellation`  +-------+
+ *     |    ( SKIPS THIS CELL IN THE )              returned true, complete the hung `resume` accordingly.
+ *     |    ( SMART MODE             )
  *     |
  *     |
  *     |            `suspend` gets   +-------+  ( RENDEZVOUS HAPPENED, )
- *     |         +-----------------> | TAKEN |  (  BOTH `resume` and   )
+ *     |         +-----------------> | TAKEN |  (  BOTH `resume` AND   )
  *     V         |   the element.    +-------+  (  `suspend` SUCCEED   )
  *  +-------+    |
  *  | value | --<
@@ -139,21 +141,20 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
      * cancellation mode is used (so that cancelled cells are skipped by
      * [resume]). Typically, this function performs the logical cancellation.
      * It returns `true` if the cancellation succeeds and the cell can be
-     * marked as [CANCELLED]. This way, a concurrent [resume] skips this cell,
-     * and the value stays in the waiting queue. However, if the concurrent
-     * [resume] should be refused by this [SegmentQueueSynchronizer],
-     * [onCancellation] should return false. In this case, [tryReturnRefusedValue]
-     * is invoked with the value of [resume], following by [returnValue]
-     * if the attempt fails.
+     * marked as [CANCELLED]. This way, [resume] skips this cell and passes
+     * the value to another waiter in the waiting queue. However, if [resume]
+     * should be refused on this cell, [onCancellation] should return false.
+     * In this case, [tryReturnRefusedValue] is invoked with the value of [resume],
+     * following by [returnValue] if the attempt fails.
      */
     protected open fun onCancellation() : Boolean = false
 
     /**
-     * This function specifies how the refused by
-     * this [SegmentQueueSynchronizer] value should
+     * This function specifies how the value refused
+     * by this [SegmentQueueSynchronizer] should
      * be returned back to the data structure. It
-     * returns `true` if succeeds or `false` if the
-     * attempt failed, so that [returnValue] should
+     * returns `true` on success or `false` if the
+     * attempt fails, so that [returnValue] should
      * be used to complete the returning.
      */
     protected open fun tryReturnRefusedValue(value: T): Boolean = true
@@ -164,11 +165,15 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
      * the data structure. It is typically the function
      * that invokes [resume] (e.g., [release][Semaphore.release]
      * in [Semaphore]).
+     *
+     * This function is invoked when [onCancellation] returns `false`
+     * and the following [tryReturnRefusedValue] fails, or when prompt
+     * cancellation occurs.
      */
     protected open fun returnValue(value: T) {}
 
     /**
-     * This is a short-cut for [tryReturnRefusedValue] and
+     * This is a shortcut for [tryReturnRefusedValue] and
      * the following [returnValue] invocation if it fails.
      */
     private fun returnRefusedValue(value: T) {
@@ -179,10 +184,10 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
     /**
      * Puts the specified continuation into the waiting queue, and returns `true` on success.
      * Since [suspend] and [resume] can be invoked concurrently (similarly to `park` and `unpark`
-     * for threads), it is possible that [resume] comes earlier. In this case, the [resume] comes
-     * to the first cell and puts it value into it. After that, this [suspend] should come and
-     * grab the value. However, if the [synchronous][SYNC] resumption mode is used, the concurrent
-     * [resume] can mark its cell as [broken][BROKEN]; thus, this [suspend] invocation comes to the
+     * for threads), it is possible that [resume] comes earlier. In this case, [resume] puts the
+     * value into the cell, and [suspend] is supposed to come and grab the value after that.
+     * However, if the [synchronous][SYNC] resumption mode is used, the concurrent [resume]
+     * can mark its cell as [broken][BROKEN]; thus, this [suspend] invocation comes to the
      * broken cell and fails. The typical patter is retrying both operations, the one that
      * failed on [suspend] and the one that failed on [resume], from the beginning.
      */
@@ -202,17 +207,18 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         // this is the regular path.
         val i = (enqIdx % SEGMENT_SIZE).toInt()
         if (segment.cas(i, null, cont)) {
-            // The continuation is successfully installed,
-            // add a cancellation handler if it is cancellable
-            // and complete successfully.
+            // The continuation is successfully installed, and
+            // `resume` cannot break the cell now, so that this
+            // suspension is successful.
+            // Add a cancellation handler if required and finish.
             if (cont is CancellableContinuation<*>) {
                 cont.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
             }
             return true
         }
         // The continuation installation failed. This can happen only
-        // if a concurrent `resume` comes earlier to this cell and put
-        // its value into it. Note, that in `SYNC` resumption mode
+        // if a concurrent `resume` came earlier to this cell and put
+        // its value into it. Note that in `SYNC` resumption mode
         // this concurrent `resume` can mark the cell as broken.
         //
         // Try to grab the value if the cell is not in the `BROKEN` state.
@@ -237,12 +243,12 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
     /**
      * Tries to resume the next waiter and returns `true` if
      * the resumption succeeds. However, it can fail due to
-     * several reasons. First of all, if the [resumption mode][resumeMode]
+     * several reasons. First, if the [resumption mode][resumeMode]
      * is [synchronous][SYNC], this [resume] invocation may come
      * before [suspend] and mark the cell as [broken][BROKEN];
-     * `false` is returned in this case. At the same time, according
-     * to the [simple cancellation mode][SIMPLE], this [resume] fails
-     * if the next waiter is cancelled, and returns `false` in this case.
+     * `false` is returned in this case. Another reason for [resume]
+     * to fail is waiter cancellation if the [simple cancellation mode][SIMPLE]
+     * is used.
      *
      * Note that when smart cancellation ([SMART_SYNC] or [SMART_ASYNC])
      * is used, [resume] skips cancelled waiters and can fail only in
@@ -352,18 +358,17 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                     val token = (cellState as CancellableContinuation<T>).tryResume(value, null, { returnValue(value) })
                     if (token != null) {
                         cellState.completeResume(token)
-                        return TRY_RESUME_SUCCESS
                     } else {
-                        if (cancellationMode === SIMPLE) return TRY_RESUME_FAIL_CANCELLED
+                        if (cancellationMode === SIMPLE)
+                            return TRY_RESUME_FAIL_CANCELLED
                         val cancelled = onCancellation()
                         if (cancelled) {
                             if (!resume(value)) returnValue(value)
-                            return TRY_RESUME_SUCCESS
                         } else {
                             returnRefusedValue(value)
-                            return TRY_RESUME_SUCCESS
                         }
                     }
+                    return TRY_RESUME_SUCCESS
                 }
                 cellState === CANCELLING -> {
                     // The continuation is cancelled, the handling
@@ -634,7 +639,7 @@ private class SQSSegment(id: Long, prev: SQSSegment?, pointers: Int) : Segment<S
  * asynchronously puts its value into the cell, so that the cancellation handler decides whether
  * this value should be used for resuming the next waiter or be refused. When this
  * value is a continuation, it is hard to distinguish it with the one related to the cancelled
- * waiter. Thus, such values are wrapped with [WrappedContinuationValue] in this case. Note, that the
+ * waiter. Thus, such values are wrapped with [WrappedContinuationValue] in this case. Note that the
  * wrapper is required only in [SegmentQueueSynchronizer.CancellationMode.SMART_ASYNC] mode
  * and is used in the asynchronous race resolution logic between cancellation and [resume]
  * invocation; this way, it is used relatively rare.
