@@ -51,7 +51,7 @@ open class SemaphoreBenchmark {
         val semaphore = Semaphore(_3_maxPermits)
         val jobs = ArrayList<Job>(coroutines)
         repeat(coroutines) {
-            jobs += GlobalScope.launch {
+            jobs += GlobalScope.launch(dispatcher) {
                 repeat(n) {
                     semaphore.withPermit {
                         doGeomDistrWork(WORK_INSIDE)
@@ -69,7 +69,7 @@ open class SemaphoreBenchmark {
         val semaphore = Channel<Unit>(_3_maxPermits)
         val jobs = ArrayList<Job>(coroutines)
         repeat(coroutines) {
-            jobs += GlobalScope.launch {
+            jobs += GlobalScope.launch(dispatcher) {
                 repeat(n) {
                     semaphore.send(Unit) // acquire
                     doGeomDistrWork(WORK_INSIDE)
