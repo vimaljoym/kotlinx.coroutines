@@ -420,6 +420,9 @@ internal class Barrier(private val parties: Int) : SegmentQueueSynchronizer<Unit
      * with the same value atomically.
      */
     suspend fun arrive(): Boolean {
+        // Are all parties has already arrived?
+        if (arrived.value > parties)
+            return false // fail this `arrive()`.
         // Increment the number of arrived parties.
         val a = arrived.incrementAndGet()
         return when {
