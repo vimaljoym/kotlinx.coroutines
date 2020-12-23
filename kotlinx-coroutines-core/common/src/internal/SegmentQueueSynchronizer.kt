@@ -214,9 +214,10 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
      * for threads), it is possible that [resume] comes earlier. In this case, [resume] puts the
      * value into the cell, and [suspend] is supposed to come and grab the value after that.
      * However, if the [synchronous][SYNC] resumption mode is used, the concurrent [resume]
-     * can mark its cell as [broken][BROKEN]; thus, this [suspend] invocation comes to the
-     * broken cell and fails. The typical patter is retrying both operations, the one that
-     * failed on [suspend] and the one that failed on [resume], from the beginning.
+     * can mark the cell as [broken][BROKEN]. Thus, the [suspend] invocation that comes to
+     * this broken cell fails and also returns `false`. The typical patter is retrying
+     * both operations, the one that failed on [suspend] and the one that failed on [resume],
+     * from the beginning.
      */
     @Suppress("UNCHECKED_CAST")
     fun suspend(cont: Continuation<T>): Boolean {
@@ -243,7 +244,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             }
             return true
         }
-        // The continuation installation failed. This can happen only
+        // The continuation installation has failed. This happens
         // if a concurrent `resume` came earlier to this cell and put
         // its value into it. Note that in `SYNC` resumption mode
         // this concurrent `resume` can mark the cell as broken.
@@ -304,7 +305,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
      *
      * In the smart cancellation modes ([SMART_SYNC] and [SMART_ASYNC]) the
      * cells marked as [cancelled][CANCELLED] should be skipped, so that
-     * there is no need to increment [deqIdx] one-by-one is there is a
+     * there is no need to increment [deqIdx] one-by-one if there is a
      * removed segment (logically full of [cancelled][CANCELLED] cells);
      * it is faster to point [deqIdx] to the first possibly non-cancelled
      * cell instead, i.e. to the first segment id multiplied by the
@@ -331,7 +332,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // Adjust `deqIdx` to the first
             // non-removed segment if needed.
             if (adjustDeqIdx) adjustDeqIdx(segment.id * SEGMENT_SIZE)
-            // The cell #deqIdx is in the cancelled state,
+            // The cell #deqIdx is in the `CANCELLED` state,
             // return the corresponding failure.
             return TRY_RESUME_FAIL_CANCELLED
         }
@@ -350,8 +351,8 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                     if (!segment.cas(i, null, value)) continue@modify_cell
                     // Finish immediately in the async mode.
                     if (resumeMode == ASYNC) return TRY_RESUME_SUCCESS
-                    // Wait for a concurrent `suspend` for a bounded
-                    // time; it should mark the cell as taken.
+                    // Wait for a concurrent `suspend`, which should mark
+                    // the cell as taken, for a bounded time in a spin-loop.
                     repeat(MAX_SPIN_CYCLES) {
                         if (segment.get(i) === TAKEN) return TRY_RESUME_SUCCESS
                     }
@@ -366,7 +367,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                     return TRY_RESUME_FAIL_CANCELLED
                 }
                 // Should the current `resume` be refused
-                // by this  `SegmentQueueSynchronizer`?
+                // by this `SegmentQueueSynchronizer`?
                 cellState === REFUSE -> {
                     // This state should not occur
                     // in the simple cancellation mode.
@@ -378,30 +379,45 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                 }
                 // Does the cell store a cancellable continuation?
                 cellState is CancellableContinuation<*> -> {
-                    // Change the cell state to `RESUMING`, so that
-                    // the cancellation handler is not invoked.
+                    // Change the cell state to `RESUMED`, so that
+                    // the cancellation handler cannot be invoked.
                     if (!segment.cas(i, cellState, RESUMED)) continue@modify_cell
                     // Try to resume the continuation.
                     val token = (cellState as CancellableContinuation<T>).tryResume(value, null, { returnValue(value) })
                     if (token != null) {
+                        // `tryResume` has succeeded.
                         cellState.completeResume(token)
                     } else {
+                        // `tryResume` has failed.
+                        // Fail the current `resume` in the simple cancellation mode.
                         if (cancellationMode === SIMPLE)
                             return TRY_RESUME_FAIL_CANCELLED
+                        // In smart cancellation mode, the cancellation
+                        // handler should be invoked.
                         val cancelled = onCancellation()
                         if (cancelled) {
+                            // Try to resume the next waiter. However,
+                            // it can fail dur to synchronous mode.
+                            // Return the value to the data structure
+                            // in this case.
                             if (!resume(value)) returnValue(value)
                         } else {
+                            // The value is refused, return
+                            // it to the data structure.
                             returnRefusedValue(value)
                         }
                     }
+                    // Once the state is changed to `RESUMED`, this
+                    // `resume` is considered as successful. Note that
+                    // possible cancellation is properly handled above,
+                    // so that it does not break this `resume`.
                     return TRY_RESUME_SUCCESS
                 }
                 cellState === CANCELLING -> {
-                    // The continuation is cancelled, the handling
-                    // logic depends on the cancellation mode.
+                    // The continuation is cancelled but the
+                    // cancellation handler is not completed yet.
                     when (cancellationMode) {
-                        // Fail correspondingly in the simple mode.
+                        // Fail in the simple mode.
                         SIMPLE -> return TRY_RESUME_FAIL_CANCELLED
                         // In the smart cancellation mode this cell
                         // can be either skipped (if it is going to
@@ -411,11 +427,11 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                         // the state of this cell is changed to
                         // either `CANCELLED` or `REFUSE`.
                         SMART_SYNC -> continue@modify_cell
-                        // At the same time, in `SMART_ASYNC` mode
+                        // At the same time, in `SMART_ASYNC` mode,
                         // `resume` replaces the cancelled continuation
                         // with the resumption value and completes.
                         // Thus, the concurrent cancellation handler
-                        // notices this value and completes this `resume`.
+                        // detects this value and completes this `resume`.
                         SMART_ASYNC -> {
                             // Try to put the value into the cell if there is
                             // no decision on whether the cell is in the `CANCELLED`
@@ -457,10 +473,10 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
      * suspension; in other words, an elimination happens in this case.
      * However, this strategy produces an incorrect behavior when used for some
      * data structures (e.g., for [tryAcquire][Semaphore.tryAcquire] in [Semaphore]),
-     * so that the [synchronous][SYNC] is introduced. Similarly to the asynchronous one,
+     * so that the [synchronous][SYNC] was introduced. Similarly to the asynchronous one,
      * [resume] puts the value into the cell, but do not finish right after that.
      * In opposite, it waits in a bounded spin-loop (see [MAX_SPIN_CYCLES]) until
-     * the value is taken, completes after that. If the value is not taken after
+     * the value is taken, and completes after that. If the value is not taken after
      * this spin-loop is finished, [resume] marks the cell as [broken][BROKEN]
      * and fails, so that the corresponding [suspend] invocation finds the cell
      * [broken][BROKEN] and fails as well.
@@ -469,12 +485,12 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
 
     /**
      * These modes define the mode that should be used for cancellation.
-     * Essentially, there are two modes: simple and smart.
-     * Specifies whether [resume] should fail on cancelled waiters ([SIMPLE]),
+     * Essentially, there are two modes, simple and smart, which
+     * specify whether [resume] should fail on cancelled waiters ([SIMPLE]),
      * or skip them in either [synchronous][SMART_SYNC] or [asynchronous][SMART_ASYNC]
-     * way. In the asynchronous skip mode [resume] may pass the element to the
-     * cancellation handler in order not to wait, so that the element can be "hung"
-     * for a while.
+     * way. In the asynchronous mode [resume] may pass the element to the
+     * cancellation handler in order not to wait, so that the element can be
+     * "hung" for a while.
      */
     internal enum class CancellationMode { SIMPLE, SMART_SYNC, SMART_ASYNC }
 
@@ -494,12 +510,12 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // Do we use simple or smart cancellation?
             if (cancellationMode === SIMPLE) {
                 // In the simple cancellation mode the logic
-                // is straightforward -- mark the  cell as
+                // is straightforward -- mark the cell as
                 // cancelled to avoid memory leaks and complete.
                 segment.markCancelled(index)
                 return
             }
-            // We are in the smart cancellation mode.
+            // We are in a smart cancellation mode.
             // Perform the cancellation-related logic and
             // check whether the value of the `resume` that
             // comes to this cell should be processed in the
@@ -577,12 +593,11 @@ private class SQSSegment(id: Long, prev: SQSSegment?, pointers: Int) : Segment<S
     inline fun getAndSet(index: Int, value: Any?): Any? = waiters[index].getAndSet(value)
 
     /**
-     * Marks the cell as cancelled and returns `null`, so that
-     * the [resume] that comes to the cell should notice
-     * that the cell is cancelled and should fail or skip it
-     * depending on the cancellation mode. However, in [SMART_ASYNC]
-     * cancellation mode [resume] that comes to the cell with cancelled
-     * continuation asynchronously puts its value into the cell,
+     * Marks the cell as cancelled and returns `null`, so that the [resume]
+     * that comes to this cell detects that it is in the `CANCELLED` state
+     * and should fail or skip it depending on the cancellation mode.
+     * However, in [SMART_ASYNC] cancellation mode [resume] that comes to the cell
+     * with cancelled continuation asynchronously puts its value into the cell,
      * and the cancellation handler completes the resumption.
      * In this case, [markCancelled] returns this non-null value.
      *
@@ -598,8 +613,17 @@ private class SQSSegment(id: Long, prev: SQSSegment?, pointers: Int) : Segment<S
     }
 
     /**
-     * TODO
-     * returns `true` on success
+     * In [SegmentQueueSynchronizer] we use different cancellation handlers for
+     * normal and prompt cancellations. However, there is no way to split them
+     * in the current [CancellableContinuation] API: the handler set by
+     * [CancellableContinuation.invokeOnCancellation] is always invoked,
+     * even on prompt cancellation. In order to guarantee that only one of
+     * the handler is invoked (either the one installed by `invokeOnCancellation`
+     * or the one passed in `tryResume`) we use a special intermediate state
+     * `CANCELLING` for normal cancellation. Thus, if the state is already
+     * `RESUMED`, then [tryMarkCancelling] returns `false` and the normal
+     * cancellation handler (installed by `invokeOnCancellation`) is not
+     * executed (we try to move the state to `CANCELLING` in the beginning).
      */
     fun tryMarkCancelling(index: Int): Boolean {
         while (true) {
