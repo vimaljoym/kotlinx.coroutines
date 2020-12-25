@@ -7,7 +7,6 @@ package kotlinx.coroutines.lincheck
 
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.*
-import kotlinx.coroutines.sync.ReadWriteMutexImpl.*
 import kotlinx.coroutines.sync.ReadWriteMutexImpl.WriteUnlockPolicy.*
 import org.jetbrains.kotlinx.lincheck.*
 import org.jetbrains.kotlinx.lincheck.annotations.*
@@ -15,7 +14,6 @@ import org.jetbrains.kotlinx.lincheck.annotations.Operation
 import org.jetbrains.kotlinx.lincheck.paramgen.*
 import org.jetbrains.kotlinx.lincheck.strategy.managed.modelchecking.*
 import org.jetbrains.kotlinx.lincheck.verifier.*
-import kotlin.reflect.*
 
 class ReadWriteMutexLincheckTest: AbstractLincheckTest() {
     private val m = ReadWriteMutexImpl()
@@ -162,10 +160,10 @@ internal class ReadWriteMutexCounterLincheckTest : AbstractLincheckTest() {
     var c = 0
 
     @Operation(allowExtraSuspension = true, promptCancellation = false)
-    suspend fun inc(): Int = m.withWriteLock { c++ }
+    suspend fun inc(): Int = m.write { c++ }
 
     @Operation(allowExtraSuspension = true, promptCancellation = false)
-    suspend fun get(): Int = m.withReadLock { c }
+    suspend fun get(): Int = m.read { c }
 
     @StateRepresentation
     fun stateRepresentation(): String = "$c + ${m.stateRepresentation}"

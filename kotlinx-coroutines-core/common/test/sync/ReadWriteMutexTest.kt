@@ -15,8 +15,20 @@ class ReadWriteMutexTest : TestBase() {
         m.readLock()
         m.readUnlock()
         m.readUnlock()
-        m.writeLock()
-        m.writeUnlock()
+        m.write.lock()
+        m.write.unlock()
+        m.readLock()
+    }
+
+    @Test
+    fun simpleTryLockSingleCoroutineTest() = runTest {
+        val m = ReadWriteMutex()
+        m.tryReadLock()
+        m.tryReadLock()
+        m.readUnlock()
+        m.readUnlock()
+        m.write.tryLock()
+        m.write.unlock()
         m.readLock()
     }
 
@@ -34,7 +46,7 @@ class ReadWriteMutexTest : TestBase() {
         expect(4)
         launch {
             expect(5)
-            m.writeLock()
+            m.write.lock()
             expect(8)
         }
         yield()
@@ -53,7 +65,7 @@ class ReadWriteMutexTest : TestBase() {
         m.readLock()
         val wJob = launch {
             expect(1)
-            m.writeLock()
+            m.write.lock()
             expectUnreached()
         }
         yield()

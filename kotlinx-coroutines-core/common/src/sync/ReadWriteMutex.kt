@@ -7,10 +7,10 @@ package kotlinx.coroutines.sync
 import kotlinx.atomicfu.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.internal.*
+import kotlinx.coroutines.selects.*
 import kotlinx.coroutines.sync.ReadWriteMutexImpl.WriteUnlockPolicy.*
 import kotlin.contracts.*
 import kotlin.js.*
-import kotlin.random.*
 
 /**
  * A readers-writer mutex maintains a logical pair of locks, one for read-only
@@ -34,7 +34,7 @@ import kotlin.random.*
  * also suspends the invoker.
  *
  * Typical usage of [ReadWriteMutex] is wrapping each read invocation with
- * [ReadWriteMutex.withReadLock] and each write invocation with [ReadWriteMutex.withWriteLock]
+ * [ReadWriteMutex.read] and each write invocation with [ReadWriteMutex.write]
  * correspondingly. These wrapper functions guarantee that the mutex is used correctly and safely.
  * However, one can use `lock` and `unlock` operations directly, but `unlock` should be invoked only
  * after a successful corresponding `lock` invocation.
@@ -50,10 +50,10 @@ import kotlin.random.*
 @ExperimentalCoroutinesApi
 public interface ReadWriteMutex {
     /**
-     * Acquires a reader lock of this mutex if the writer lock is not held,
-     * suspends the caller otherwise until the write lock is released and
-     * this reader is resumed. Please note that the next waiting writer instead
-     * of this reader can be released after the currently active writer releases the lock.
+     * Acquires a reader lock of this mutex if the writer lock is not held and there is no writer
+     * waiting for it, suspends the caller otherwise until the write lock is released and
+     * this reader is resumed. Please note that the next waiting writer instead of this reader
+     * can be released after the currently active writer releases the lock.
      *
      * This suspending function is cancellable. If the [Job] of the current coroutine is cancelled or completed while this
      * function is suspended, this function immediately resumes with [CancellationException].
@@ -65,7 +65,7 @@ public interface ReadWriteMutex {
      * Note that this function does not check for cancellation when it is not suspended.
      * Use [yield] or [CoroutineScope.isActive] to periodically check for cancellation in tight loops if needed.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withReadLock] for safety reasons,
+     * **Hazardous Concurrent API.** It is recommended to use [read] for safety reasons,
      * so that the acquired reader lock is always released at the end of your critical section
      * and [readUnlock] is never invoked before a successful reader lock acquisition.
      */
@@ -73,10 +73,17 @@ public interface ReadWriteMutex {
     public suspend fun readLock()
 
     /**
+     * Attempts to acquire a reader lock of this mutex if the writer lock is not held and
+     * there is no writer waiting for it, return `false` if the lock cannot be acquired immediately.
+     */
+    @ExperimentalCoroutinesApi
+    public fun tryReadLock(): Boolean
+
+    /**
      * Releases a reader lock of this mutex and resumes the first waiting writer
      * if this operation releases the last acquired reader lock.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withReadLock] for safety reasons,
+     * **Hazardous Concurrent API.** It is recommended to use [read] for safety reasons,
      * so that the acquired reader lock is always released at the end of your critical section
      * and [readUnlock] is never invoked before a successful reader lock acquisition.
      */
@@ -84,38 +91,24 @@ public interface ReadWriteMutex {
     public fun readUnlock()
 
     /**
-     * Acquires the writer lock of this mutex if neither the writer lock nor a reader one is held,
-     * suspends the caller otherwise until the exclusive access is granted by either [readUnlock]
-     * or [writeUnlock]. Please note that all suspended writers are processed in first-in-first-out order.
+     * Returns a [Mutex] which manipulates with the writer lock of this [ReadWriteMutex].
      *
-     * This suspending function is cancellable. If the [Job] of the current coroutine is cancelled or completed while this
-     * function is suspended, this function immediately resumes with [CancellationException].
-     * There is a **prompt cancellation guarantee**. If the job was cancelled while this function was
-     * suspended, it will not resume successfully. See [suspendCancellableCoroutine] documentation for low-level details.
-     * This function releases the lock if it was already acquired by this function before the [CancellationException]
-     * was thrown.
+     * When acquires the writer lock, the operation completes immediately if neither the writer lock nor
+     * a reader one is held, the acquisition suspends the caller otherwise until the exclusive access
+     * is granted by either [readUnlock()][readUnlock] or [write.unlock()][Mutex.unlock]. Please note that
+     * all suspended writers are processed in first-in-first-out order.
      *
-     * Note that this function does not check for cancellation when it is not suspended.
-     * Use [yield] or [CoroutineScope.isActive] to periodically check for cancellation in tight loops if needed.
+     * Please note that this [Mutex] implementation for writers does not support owners in [lock()][Mutex.lock]
+     * and [withLock { ... }][Mutex.withLock] functions, as well as the [onLock][Mutex.onLock] select clause.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withWriteLock] for safety reasons,
-     * so that the acquired reader lock is always released at the end of your critical section
-     * and [writeUnlock] is never invoked before a successful reader lock acquisition.
-     */
-    public suspend fun writeLock()
-
-    /**
-     * Releases the writer lock and resumes the first waiting writer or waiting readers.
+     * When releasing the writer lock, the operation resumes the first waiting writer or waiting readers.
      * Note that different fairness policies can be applied by an implementation, such as
      * prioritizing readers or writers and attempting to always resume them at first,
      * choosing the current prioritization by flipping a coin, or providing a truly fair
      * strategy where all waiters, both readers and writers, form a single first-in-first-out queue.
-     *
-     * **Hazardous Concurrent API.** It is recommended to use [withWriteLock] for safety reasons,
-     * so that the acquired writer lock is always released at the end of your critical section
-     * and [writeUnlock] is never invoked before a successful writer lock acquisition.
      */
-    public fun writeUnlock()
+    @ExperimentalCoroutinesApi
+    public val write: Mutex
 }
 
 /**
@@ -130,7 +123,7 @@ public fun ReadWriteMutex(): ReadWriteMutex = ReadWriteMutexImpl()
  * @return the return value of the [action].
  */
 @OptIn(ExperimentalContracts::class)
-public suspend inline fun <T> ReadWriteMutex.withReadLock(action: () -> T): T {
+public suspend inline fun <T> ReadWriteMutex.read(action: () -> T): T {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
     }
@@ -149,16 +142,16 @@ public suspend inline fun <T> ReadWriteMutex.withReadLock(action: () -> T): T {
  * @return the return value of the [action].
  */
 @OptIn(ExperimentalContracts::class)
-public suspend inline fun <T> ReadWriteMutex.withWriteLock(action: () -> T): T {
+public suspend inline fun <T> ReadWriteMutex.write(action: () -> T): T {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
     }
 
-    writeLock()
+    write.lock()
     try {
         return action()
     } finally {
-        writeUnlock()
+        write.unlock()
     }
 }
 
@@ -195,7 +188,7 @@ public suspend inline fun <T> ReadWriteMutex.withWriteLock(action: () -> T): T {
  * should be managed, which makes the revert part non-trivial. The details are discussed in the code
  * comments and appear almost everywhere.
  * */
-internal class ReadWriteMutexImpl : ReadWriteMutex {
+internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
     // The number of coroutines waiting for a reader lock in `sqsReaders`.
     private val waitingReaders = atomic(0)
     // This state field contains several counters
@@ -212,6 +205,24 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
     private val sqsReaders = ReadersSQS() // The place where readers should suspend and be resumed.
     private val sqsWriters = WritersSQS() // The place where writers should suspend and be resumed.
 
+    private var curUnlockPolicy = false // false -- prioritize readers
+                                         // true -- prioritize writers
+
+    @ExperimentalCoroutinesApi
+    override val write: Mutex get() = this // we do not create an extra object this way.
+    override val isLocked: Boolean get() = state.value.wla
+    override fun tryLock(owner: Any?): Boolean = tryWriteLock()
+    override suspend fun lock(owner: Any?) {
+        if (owner != null) error("ReadWriteMutex.write does not support owners")
+        writeLock()
+    }
+    override val onLock: SelectClause2<Any?, Mutex> get() = error("ReadWriteMutex.write does not support `onLock`")
+    override fun holdsLock(owner: Any) = error("ReadWriteMutex.write does not support owners")
+    override fun unlock(owner: Any?) {
+        if (owner != null) error("ReadWriteMutex.write does not support owners")
+        writeUnlock()
+    }
+
     override suspend fun readLock() {
         // Try to acquire a reader lock without suspension at first,
         // this can be considered as a performance optimization and
@@ -223,7 +234,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         readLockSlowPath()
     }
 
-    private fun tryReadLock(): Boolean {
+    override fun tryReadLock(): Boolean {
         while (true) {
             // Read the current state.
             val s = state.value
@@ -295,8 +306,8 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         while (true) {
             // Read the current state.
             val s = state.value
-            check(!s.wla) { "Invalid `readUnlock` invocation: the writer lock is acquired." }
-            check(s.ar > 0) { "Invalid `readUnlock` invocation: no reader lock is acquired." }
+            check(!s.wla) { "Invalid `readUnlock` invocation: the writer lock is acquired. $INVALID_UNLOCK_INVOCATION_TIP" }
+            check(s.ar > 0) { "Invalid `readUnlock` invocation: no reader lock is acquired. $INVALID_UNLOCK_INVOCATION_TIP" }
             // Is this reader the last one and the `RWR` flag unset (=> it is valid to resume the next writer)?
             if (s.ar == 1 && !s.rwr) {
                 // The algorithm checks whether there is a waiting writer and resumes it.
@@ -362,7 +373,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         override fun returnValue(value: Unit) = readUnlock()
     }
 
-    override suspend fun writeLock() {
+    internal suspend fun writeLock() {
         // The algorithm is straightforward -- it reads the state,
         // checks that there is no reader or writer lock acquired,
         // and tries to change the state by setting the `WLA` flag.
@@ -389,36 +400,35 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         }
     }
 
-//    TODO: uncomment this if we decide to add `try[Read,Write]Lock` functions, remove otherwise.
-//    override fun tryWriteLock(): Boolean {
-//        // The algorithm is straightforward -- it reads the state,
-//        // checks that there is no reader or writer lock acquired,
-//        // and tries to change the state by setting the `WLA` flag.
-//        while (true) {
-//            // Read the current state.
-//            val s = state.value
-//            // Is there an active writer, a concurrent `writeUnlock` operation
-//            // (thus, an uncompleted writer), or an active reader? Fail in this case.
-//            if (s.wla || s.rwr || s.ar != 0) return false
-//            assert { s.ww == 0 }
-//            // Try to acquire the writer lock, re-try the operation if this CAS fails.
-//            if (state.compareAndSet(s, state(0, true, 0, false)))
-//                return true
-//        }
-//    }
+    internal fun tryWriteLock(): Boolean {
+        // The algorithm is straightforward -- it reads the state,
+        // checks that there is no reader or writer lock acquired,
+        // and tries to change the state by setting the `WLA` flag.
+        while (true) {
+            // Read the current state.
+            val s = state.value
+            // Is there an active writer, a concurrent `writeUnlock` operation
+            // (thus, an uncompleted writer), or an active reader? Fail in this case.
+            if (s.wla || s.rwr || s.ar != 0) return false
+            assert { s.ww == 0 }
+            // Try to acquire the writer lock, re-try the operation if this CAS fails.
+            if (state.compareAndSet(s, state(0, true, 0, false)))
+                return true
+        }
+    }
 
-    override fun writeUnlock() {
+    internal fun writeUnlock() {
         // Since we store waiting readers and writers separately, it is not easy
         // to determine whether the next readers or the next writer should be resumed.
         // However, it is natural to have the following policies:
         // - PRIORITIZE_READERS -- always resume all waiting readers at first;
         //   the next waiting writer is resumed only if no reader is waiting for a lock.
         // - PRIORITIZE_WRITERS -- always resumed the next writer first;
-        // - RANDOM -- choose one of the policies above with a 50/50 probability.
-        //   We find the random strategy fair enough in practice, but the others are used
+        // - ROUND_ROBIN -- switches between the policies above on every invocation.
+        //   We find the round-robin strategy fair enough in practice, but the others are used
         //   in Lincheck tests. However, it could be useful to have `PRIORITIZE_WRITERS`
         //   when the writer lock is used for UI updates or similar.
-        writeUnlock(RANDOM)
+        writeUnlock(ROUND_ROBIN)
     }
 
     internal fun writeUnlock(policy: WriteUnlockPolicy) {
@@ -436,11 +446,12 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         while (true) {
             // Read the current state at first.
             val s = state.value
-            check(s.wla) { "Invalid `writeUnlock` invocation: the writer lock is not acquired." }
+            check(s.wla) { "Invalid `writeUnlock` invocation: the writer lock is not acquired. $INVALID_UNLOCK_INVOCATION_TIP" }
             assert { !s.rwr }
             assert { s.ar == 0 }
             // Should we resume the next writer?
-            val resumeWriter = (s.ww > 0) && (policy == PRIORITIZE_WRITERS || policy == RANDOM && Random.nextBoolean())
+            curUnlockPolicy = !curUnlockPolicy // change the unlock policy for `ROUND_ROBIN`
+            val resumeWriter = (s.ww > 0) && (policy == PRIORITIZE_WRITERS || policy == ROUND_ROBIN && curUnlockPolicy)
             if (resumeWriter) {
                 // Resume the next writer -- try to decrement the number of waiting
                 // writers and resume the first one in `sqsWriters` on success.
@@ -465,7 +476,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         }
     }
 
-    private fun completeWaitingReadersResumption() {
+    internal fun completeWaitingReadersResumption() {
         // This function is called after the `RWR` flag is set
         // and completes the resumption process. Note that
         // it also checks whether the next waiting writer should be
@@ -574,7 +585,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex {
         ",rwr=${state.value.rwr}" +
         ",sqs_r={$sqsReaders},sqs_w={$sqsWriters}>"
 
-    internal enum class WriteUnlockPolicy { PRIORITIZE_READERS, PRIORITIZE_WRITERS, RANDOM }
+    internal enum class WriteUnlockPolicy { PRIORITIZE_READERS, PRIORITIZE_WRITERS, ROUND_ROBIN }
 }
 
 // Construct the value for [ReadWriteMutexImpl.state] field,
@@ -598,3 +609,7 @@ private const val WLA_BIT = 1L
 private const val RWR_BIT = 1L shl 1
 private const val WW_MULTIPLIER = 1L shl 2
 private const val AR_MULTIPLIER = 1L shl 33
+
+private const val INVALID_UNLOCK_INVOCATION_TIP = "This can be caused by releasing the lock without acquiring it at first, " +
+    "or incorrectly putting the acquisition inside the \"try\" block of the \"try-finally\" section that safely releases " +
+    "the lock in the \"finally\" block - the acquisition should be performed right before this \"try\" block."
