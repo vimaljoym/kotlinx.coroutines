@@ -65,9 +65,9 @@ public interface ReadWriteMutex {
      * Note that this function does not check for cancellation when it is not suspended.
      * Use [yield] or [CoroutineScope.isActive] to periodically check for cancellation in tight loops if needed.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [read] for safety reasons,
-     * so that the acquired reader lock is always released at the end of your critical section
-     * and [readUnlock] is never invoked before a successful reader lock acquisition.
+     * It is recommended to use [read] for safety reasons, so that the acquired reader lock is always
+     * released at the end of your critical section and [readUnlock] is never invoked before a successful
+     * reader lock acquisition.
      */
     @ExperimentalCoroutinesApi
     public suspend fun readLock()
@@ -83,9 +83,9 @@ public interface ReadWriteMutex {
      * Releases a reader lock of this mutex and resumes the first waiting writer
      * if this operation releases the last acquired reader lock.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [read] for safety reasons,
-     * so that the acquired reader lock is always released at the end of your critical section
-     * and [readUnlock] is never invoked before a successful reader lock acquisition.
+     * It is recommended to use [read] for safety reasons, so that the acquired reader lock is always
+     * released at the end of your critical section and [readUnlock] is never invoked before a successful
+     * reader lock acquisition.
      */
     @ExperimentalCoroutinesApi
     public fun readUnlock()

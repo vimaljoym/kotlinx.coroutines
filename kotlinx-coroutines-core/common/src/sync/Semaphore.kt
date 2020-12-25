@@ -46,18 +46,18 @@ public interface Semaphore {
      *
      * Use [tryAcquire] to try acquire a permit of this semaphore without suspension.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withPermit] for safety reasons,
-     * so that the acquired permit is always released at the end of your critical section
-     * and [release] is never invoked before a successful permit acquisition.
+     * It is recommended to use [withPermit] for safety reasons, so that the acquired permit is always
+     * released at the end of your critical section and [release] is never invoked before a successful
+     * permit acquisition.
      */
     public suspend fun acquire()
 
     /**
      * Tries to acquire a permit from this semaphore without suspension.
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withPermit] for safety reasons,
-     * so that the acquired permit is always released at the end of your critical section
-     * and [release] is never invoked before a successful permit acquisition.
+     * It is recommended to use [withPermit] for safety reasons, so that the acquired permit is always
+     * released at the end of your critical section and [release] is never invoked before a successful
+     * permit acquisition.
      *
      * @return `true` if a permit was acquired, `false` otherwise.
      */
@@ -68,9 +68,9 @@ public interface Semaphore {
      * suspending acquirer if there is one at the point of invocation.
      * Throws [IllegalStateException] if the number of [release] invocations is greater than the number of preceding [acquire].
      *
-     * **Hazardous Concurrent API.** It is recommended to use [withPermit] for safety reasons,
-     * so that the acquired permit is always released at the end of your critical section
-     * and [release] is never invoked before a successful permit acquisition.
+     * It is recommended to use [withPermit] for safety reasons, so that the acquired permit is always
+     * released at the end of your critical section and [release] is never invoked before a successful
+     * permit acquisition.
      */
     public fun release()
 }
