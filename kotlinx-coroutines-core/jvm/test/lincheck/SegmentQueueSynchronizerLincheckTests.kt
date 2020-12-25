@@ -37,7 +37,6 @@ import kotlin.reflect.*
  * it is hard to make [tryAcquire] linearizable in this case, so that
  * it is not supported here.
  */
-@OptIn(HazardousConcurrentApi::class)
 internal class AsyncSemaphore(permits: Int) : SegmentQueueSynchronizer<Unit>(), Semaphore {
     override val resumeMode get() = ASYNC
 
@@ -84,7 +83,6 @@ internal class AsyncSemaphore(permits: Int) : SegmentQueueSynchronizer<Unit>(), 
  * when the suspended continuation can be cancelled if it is logically
  * resumed but not dispatched yet.
  */
-@OptIn(HazardousConcurrentApi::class)
 internal class AsyncSemaphoreSmart(permits: Int) : SegmentQueueSynchronizer<Unit>(), Semaphore {
     override val resumeMode get() = ASYNC
     override val cancellationMode get() = SMART_ASYNC
@@ -141,7 +139,6 @@ internal class AsyncSemaphoreSmart(permits: Int) : SegmentQueueSynchronizer<Unit
  * back to the semaphore in [returnValue] function. It is worth noting, that it
  * should be possible to make this implementation correct with prompt cancellation.
  */
-@OptIn(HazardousConcurrentApi::class)
 internal class SyncSemaphoreSmart(permits: Int) : SegmentQueueSynchronizer<Boolean>(), Semaphore {
     override val resumeMode get() = SYNC
     override val cancellationMode get() = SMART_SYNC
@@ -202,7 +199,6 @@ class SemaphoreUnboundedSequential2 : SemaphoreSequential(2, false)
 
 // Comparing to `SemaphoreLincheckTestBase`, it allows `acquire()`-s
 // to have extra suspensions and does not support `tryAcquire()`.
-@OptIn(HazardousConcurrentApi::class)
 abstract class AsyncSemaphoreLincheckTestBase(
     semaphore: Semaphore,
     private val seqSpec: KClass<*>

@@ -7,7 +7,6 @@ package kotlinx.coroutines.sync
 import kotlinx.coroutines.*
 import kotlin.test.*
 
-@OptIn(HazardousConcurrentApi::class)
 class ReadWriteMutexTest : TestBase() {
     @Test
     fun simpleSingleCoroutineTest() = runTest {

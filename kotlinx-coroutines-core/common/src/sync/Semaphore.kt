@@ -50,7 +50,6 @@ public interface Semaphore {
      * so that the acquired permit is always released at the end of your critical section
      * and [release] is never invoked before a successful permit acquisition.
      */
-    @HazardousConcurrentApi
     public suspend fun acquire()
 
     /**
@@ -62,7 +61,6 @@ public interface Semaphore {
      *
      * @return `true` if a permit was acquired, `false` otherwise.
      */
-    @HazardousConcurrentApi
     public fun tryAcquire(): Boolean
 
     /**
@@ -74,7 +72,6 @@ public interface Semaphore {
      * so that the acquired permit is always released at the end of your critical section
      * and [release] is never invoked before a successful permit acquisition.
      */
-    @HazardousConcurrentApi
     public fun release()
 }
 
@@ -93,7 +90,7 @@ public fun Semaphore(permits: Int, acquiredPermits: Int = 0): Semaphore = Semaph
  *
  * @return the return value of the [action].
  */
-@OptIn(ExperimentalContracts::class, HazardousConcurrentApi::class)
+@OptIn(ExperimentalContracts::class)
 public suspend inline fun <T> Semaphore.withPermit(action: () -> T): T {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
@@ -107,7 +104,6 @@ public suspend inline fun <T> Semaphore.withPermit(action: () -> T): T {
     }
 }
 
-@OptIn(HazardousConcurrentApi::class)
 private class SemaphoreImpl(
     private val permits: Int,
     acquiredPermits: Int

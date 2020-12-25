@@ -37,8 +37,7 @@ import kotlin.random.*
  * [ReadWriteMutex.withReadLock] and each write invocation with [ReadWriteMutex.withWriteLock]
  * correspondingly. These wrapper functions guarantee that the mutex is used correctly and safely.
  * However, one can use `lock` and `unlock` operations directly, but `unlock` should be invoked only
- * after a successful corresponding `lock` invocation. Since such low-level API is potentially error-prone,
- * it is marked as [HazardousConcurrentApi] and requires the corresponding [OptIn] declaration.
+ * after a successful corresponding `lock` invocation.
  *
  * The advantage of using [ReadWriteMutex] comparing to the plain [Mutex] is an availability
  * to parallelize read operations and, therefore, increasing the level of concurrency.
@@ -48,6 +47,7 @@ import kotlin.random.*
  * the plain [Mutex].  Therefore, it is highly recommended to measure the performance difference t
  * o make the right choice.
  */
+@ExperimentalCoroutinesApi
 public interface ReadWriteMutex {
     /**
      * Acquires a reader lock of this mutex if the writer lock is not held,
@@ -69,7 +69,7 @@ public interface ReadWriteMutex {
      * so that the acquired reader lock is always released at the end of your critical section
      * and [readUnlock] is never invoked before a successful reader lock acquisition.
      */
-    @HazardousConcurrentApi
+    @ExperimentalCoroutinesApi
     public suspend fun readLock()
 
     /**
@@ -80,7 +80,7 @@ public interface ReadWriteMutex {
      * so that the acquired reader lock is always released at the end of your critical section
      * and [readUnlock] is never invoked before a successful reader lock acquisition.
      */
-    @HazardousConcurrentApi
+    @ExperimentalCoroutinesApi
     public fun readUnlock()
 
     /**
@@ -102,7 +102,6 @@ public interface ReadWriteMutex {
      * so that the acquired reader lock is always released at the end of your critical section
      * and [writeUnlock] is never invoked before a successful reader lock acquisition.
      */
-    @HazardousConcurrentApi
     public suspend fun writeLock()
 
     /**
@@ -116,7 +115,6 @@ public interface ReadWriteMutex {
      * so that the acquired writer lock is always released at the end of your critical section
      * and [writeUnlock] is never invoked before a successful writer lock acquisition.
      */
-    @HazardousConcurrentApi
     public fun writeUnlock()
 }
 
@@ -131,7 +129,7 @@ public fun ReadWriteMutex(): ReadWriteMutex = ReadWriteMutexImpl()
  *
  * @return the return value of the [action].
  */
-@OptIn(ExperimentalContracts::class, HazardousConcurrentApi::class)
+@OptIn(ExperimentalContracts::class)
 public suspend inline fun <T> ReadWriteMutex.withReadLock(action: () -> T): T {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
@@ -150,7 +148,7 @@ public suspend inline fun <T> ReadWriteMutex.withReadLock(action: () -> T): T {
  *
  * @return the return value of the [action].
  */
-@OptIn(ExperimentalContracts::class, HazardousConcurrentApi::class)
+@OptIn(ExperimentalContracts::class)
 public suspend inline fun <T> ReadWriteMutex.withWriteLock(action: () -> T): T {
     contract {
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
@@ -197,7 +195,6 @@ public suspend inline fun <T> ReadWriteMutex.withWriteLock(action: () -> T): T {
  * should be managed, which makes the revert part non-trivial. The details are discussed in the code
  * comments and appear almost everywhere.
  * */
-@OptIn(HazardousConcurrentApi::class)
 internal class ReadWriteMutexImpl : ReadWriteMutex {
     // The number of coroutines waiting for a reader lock in `sqsReaders`.
     private val waitingReaders = atomic(0)

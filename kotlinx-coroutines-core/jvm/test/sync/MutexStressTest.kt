@@ -8,7 +8,6 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.selects.*
 import kotlin.test.*
 
-@OptIn(HazardousConcurrentApi::class)
 class MutexStressTest : TestBase() {
     @Test
     fun testStress() = runBlocking(Dispatchers.Default) {

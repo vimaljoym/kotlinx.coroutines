@@ -42,7 +42,6 @@ public interface Mutex {
      * so that the acquired lock is always released at the end of your critical section and
      * [unlock] is never invoked before a successful lock acquisition.
      */
-    @HazardousConcurrentApi
     public fun tryLock(owner: Any? = null): Boolean
 
     /**
@@ -70,7 +69,6 @@ public interface Mutex {
      * @param owner Optional owner token for debugging. When `owner` is specified (non-null value) and this mutex
      *        is already locked with the same token (same identity), this function throws [IllegalStateException].
      */
-    @HazardousConcurrentApi
     public suspend fun lock(owner: Any? = null)
 
     /**
@@ -82,7 +80,6 @@ public interface Mutex {
      * so that the acquired lock is always released at the end of your critical section and
      * [unlock] is never invoked before a successful lock acquisition.
      */
-    @HazardousConcurrentApi
     public val onLock: SelectClause2<Any?, Mutex>
 
     /**
@@ -92,7 +89,6 @@ public interface Mutex {
      *
      * TODO let's deprecate this method, as well as owners in general
      */
-    @HazardousConcurrentApi
     public fun holdsLock(owner: Any): Boolean
 
     /**
@@ -106,7 +102,6 @@ public interface Mutex {
      * @param owner Optional owner token for debugging. When `owner` is specified (non-null value) and this mutex
      *        was locked with the different token (by identity), this function throws [IllegalStateException].
      */
-    @HazardousConcurrentApi
     public fun unlock(owner: Any? = null)
 }
 
@@ -128,7 +123,7 @@ public fun Mutex(locked: Boolean = false): Mutex =
  *
  * @return the return value of the action.
  */
-@OptIn(ExperimentalContracts::class, HazardousConcurrentApi::class)
+@OptIn(ExperimentalContracts::class)
 public suspend inline fun <T> Mutex.withLock(owner: Any? = null, action: () -> T): T {
     contract { 
         callsInPlace(action, InvocationKind.EXACTLY_ONCE)
@@ -164,7 +159,6 @@ private class Empty(
     override fun toString(): String = "Empty[$locked]"
 }
 
-@OptIn(HazardousConcurrentApi::class)
 internal class MutexImpl(locked: Boolean) : Mutex, SelectClause2<Any?, Mutex> {
     // State is: Empty | LockedQueue | OpDescriptor
     // shared objects while we have no waiters
@@ -381,7 +375,6 @@ internal class MutexImpl(locked: Boolean) : Mutex, SelectClause2<Any?, Mutex> {
         abstract fun completeResumeLockWaiter(token: Any)
     }
 
-    @OptIn(HazardousConcurrentApi::class)
     private inner class LockCont(
         owner: Any?,
         @JvmField val cont: CancellableContinuation<Unit>
@@ -394,7 +387,6 @@ internal class MutexImpl(locked: Boolean) : Mutex, SelectClause2<Any?, Mutex> {
         override fun toString(): String = "LockCont[$owner, $cont] for ${this@MutexImpl}"
     }
 
-    @OptIn(HazardousConcurrentApi::class)
     private inner class LockSelect<R>(
         owner: Any?,
         @JvmField val select: SelectInstance<R>,

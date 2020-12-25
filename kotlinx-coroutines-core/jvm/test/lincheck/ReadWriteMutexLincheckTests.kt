@@ -17,7 +17,6 @@ import org.jetbrains.kotlinx.lincheck.strategy.managed.modelchecking.*
 import org.jetbrains.kotlinx.lincheck.verifier.*
 import kotlin.reflect.*
 
-@OptIn(HazardousConcurrentApi::class)
 class ReadWriteMutexLincheckTest: AbstractLincheckTest() {
     private val m = ReadWriteMutexImpl()
     private val readLockAcquired = IntArray(6)

@@ -13,7 +13,6 @@ import org.jetbrains.kotlinx.lincheck.strategy.managed.modelchecking.*
 import org.jetbrains.kotlinx.lincheck.verifier.*
 import kotlin.reflect.*
 
-@OptIn(HazardousConcurrentApi::class)
 abstract class SemaphoreLincheckTestBase(
     private val semaphore: Semaphore,
     private val seqSpec: KClass<*>
