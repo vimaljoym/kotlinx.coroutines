@@ -30,7 +30,7 @@ import kotlin.random.*
  * Similar to [Mutex], this readers-writer mutex is **non-reentrant**,
  * so that invoking [readLock] or [writeLock] even from the coroutine that
  * currently holds the corresponding lock still suspends the invoker.
- * At the same time, invoking [readLock] from the holder of the write lock
+ * Likewise, invoking [readLock] from the holder of the write lock
  * also suspends the invoker.
  *
  * Typical usage of [ReadWriteMutex] is wrapping each read invocation with
