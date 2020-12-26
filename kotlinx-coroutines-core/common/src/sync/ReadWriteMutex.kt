@@ -30,7 +30,7 @@ import kotlin.js.*
  * Similar to [Mutex], this readers-writer mutex is **non-reentrant**,
  * so that invoking [readLock] or [writeLock] even from the coroutine that
  * currently holds the corresponding lock still suspends the invoker.
- * At the same time, invoking [readLock] from the holder of the write lock
+ * Likewise, invoking [readLock] from the holder of the write lock
  * also suspends the invoker.
  *
  * Typical usage of [ReadWriteMutex] is wrapping each read invocation with
@@ -39,13 +39,13 @@ import kotlin.js.*
  * However, one can use `lock` and `unlock` operations directly, but `unlock` should be invoked only
  * after a successful corresponding `lock` invocation.
  *
- * The advantage of using [ReadWriteMutex] comparing to the plain [Mutex] is an availability
- * to parallelize read operations and, therefore, increasing the level of concurrency.
+ * The advantage of using [ReadWriteMutex] compared to the plain [Mutex] is the ability
+ * to parallelize read operations and, therefore, increase the level of concurrency.
  * It is extremely useful for the workloads with dominating read operations so that they can be
- * executed in parallel and improve the performance. However, depending on the updates' frequency,
+ * executed in parallel, improving the performance. However, depending on the updates' frequency,
  * the execution cost of read and write operations, and the contention, it can be cheaper to use
- * the plain [Mutex].  Therefore, it is highly recommended to measure the performance difference t
- * o make the right choice.
+ * the plain [Mutex].  Therefore, it is highly recommended to measure the performance difference
+ * to make the appropriate choice.
  */
 @ExperimentalCoroutinesApi
 public interface ReadWriteMutex {
@@ -240,7 +240,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
             if (s.wla || s.ww > 0) return false
             // A reader lock is available to acquire, try to do it!
             // Note that there can be a concurrent `writeUnlock` which is
-            // resuming readers now, so that the `RWR` flag is set in this case.
+            // resuming readers now, so the `RWR` flag is set in this case.
             if (state.compareAndSet(s, state(s.ar + 1, false, 0, s.rwr)))
                 return true
             // CAS failed => the state has changed.
@@ -250,12 +250,12 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
 
     private suspend fun readLockSlowPath() = suspendCancellableCoroutineReusable<Unit> sc@ { cont ->
         retry@while (true) {
-            // Increment the number of waiting readers at first.
+            // Increment the number of waiting readers first.
             // If the current invocation should not suspend,
             // the counter will be decremented back later.
             waitingReaders.incrementAndGet()
             // Check whether this operation should suspend. If not,
-            // try to decrement the counter of waiting readers and re-start.
+            // try to decrement the counter of waiting readers and restart.
             while (true) {
                 // Read the current state.
                 val s = state.value
@@ -266,13 +266,13 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                     if (sqsReaders.suspend(cont)) return@sc
                     else continue@retry
                 } else {
-                    // A race has detected! The number of waiting readers increment
+                    // A race was detected! The number of waiting readers increment
                     // was wrong, try to decrement it back. However, it could
                     // already become zero due to a concurrent `writeUnlock`
-                    // which gets the number of waiting readers, puts `0`
+                    // which reads the number of waiting readers, puts `0`
                     // there, and resumes all these readers. In this case,
                     // it is guaranteed that a reader lock will be provided
-                    // via `sqsReaders`, so that we go wait for it.
+                    // via `sqsReaders`, so we go wait for it.
                     while (true) {
                         // Read the current number of waiting readers.
                         val wr = waitingReaders.value
@@ -286,10 +286,10 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                             else continue@retry
                         }
                         // Otherwise, try to decrement the number of waiting
-                        // readers and re-try the operation from the beginning.
+                        // readers and retry the operation from the beginning.
                         if (waitingReaders.compareAndSet(wr, wr - 1)) {
                             // Try again starting from the fast path
-                            // since the state has changed.
+                            // as the state has changed.
                             if (tryReadLock()) {
                                 cont.resume(Unit) { readUnlock() }
                                 return@sc
