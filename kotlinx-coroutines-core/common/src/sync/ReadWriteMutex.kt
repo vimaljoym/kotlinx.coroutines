@@ -73,13 +73,6 @@ public interface ReadWriteMutex {
     public suspend fun readLock()
 
     /**
-     * Attempts to acquire a reader lock of this mutex if the writer lock is not held and
-     * there is no writer waiting for it, return `false` if the lock cannot be acquired immediately.
-     */
-    @ExperimentalCoroutinesApi
-    public fun tryReadLock(): Boolean
-
-    /**
      * Releases a reader lock of this mutex and resumes the first waiting writer
      * if this operation releases the last acquired reader lock.
      *
@@ -211,7 +204,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
     @ExperimentalCoroutinesApi
     override val write: Mutex get() = this // we do not create an extra object this way.
     override val isLocked: Boolean get() = state.value.wla
-    override fun tryLock(owner: Any?): Boolean = tryWriteLock()
+    override fun tryLock(owner: Any?): Boolean = error("ReadWriteMutex.write does not support `tryLock()`")
     override suspend fun lock(owner: Any?) {
         if (owner != null) error("ReadWriteMutex.write does not support owners")
         writeLock()
@@ -232,70 +225,71 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
         readLockSlowPath()
     }
 
-    override fun tryReadLock(): Boolean {
+    private fun tryReadLock(): Boolean {
         while (true) {
             // Read the current state.
             val s = state.value
             // Is the write lock acquired or is there a waiting writer?
-            if (s.wla || s.ww > 0) return false
-            // A reader lock is available to acquire, try to do it!
-            // Note that there can be a concurrent `writeUnlock` which is
-            // resuming readers now, so the `RWR` flag is set in this case.
-            if (state.compareAndSet(s, state(s.ar + 1, false, 0, s.rwr)))
-                return true
-            // CAS failed => the state has changed.
-            // Re-read it and try to acquire a reader lock again.
+            if (!s.wla && s.ww <= 0) {
+                // A reader lock is available to acquire, try to do it!
+                // Note that there can be a concurrent `writeUnlock` which is
+                // resuming readers now, so the `RWR` flag is set in this case.
+                if (state.compareAndSet(s, state(s.ar + 1, false, 0, s.rwr)))
+                    return true
+                // CAS failed => the state has changed.
+                // Re-read it and try to acquire a reader lock again.
+                continue
+            } else return false
         }
     }
 
-    private suspend fun readLockSlowPath() = suspendCancellableCoroutineReusable<Unit> sc@ { cont ->
-        retry@while (true) {
-            // Increment the number of waiting readers first.
-            // If the current invocation should not suspend,
-            // the counter will be decremented back later.
-            waitingReaders.incrementAndGet()
-            // Check whether this operation should suspend. If not,
-            // try to decrement the counter of waiting readers and restart.
-            while (true) {
-                // Read the current state.
-                val s = state.value
-                // Is there a writer holding the lock or waiting for it?
-                if (s.wla || s.ww > 0) {
-                    // The number of waiting readers was incremented
-                    // correctly, wait for a reader lock in `sqsReaders`.
-                    if (sqsReaders.suspend(cont)) return@sc
-                    else continue@retry
-                } else {
-                    // A race was detected! The number of waiting readers increment
-                    // was wrong, try to decrement it back. However, it could
-                    // already become zero due to a concurrent `writeUnlock`
-                    // which reads the number of waiting readers, puts `0`
-                    // there, and resumes all these readers. In this case,
-                    // it is guaranteed that a reader lock will be provided
-                    // via `sqsReaders`, so we go wait for it.
-                    while (true) {
-                        // Read the current number of waiting readers.
-                        val wr = waitingReaders.value
-                        // Is our invocation already handled by a concurrent
-                        // `writeUnlock` and a reader lock is going to be
-                        // passed via `sqsReaders`? Suspend in this case --
-                        // it is guaranteed that the lock will be provided
-                        // when this concurrent `writeUnlock` completes.
-                        if (wr == 0) {
-                            if (sqsReaders.suspend(cont)) return@sc
-                            else continue@retry
+    private suspend fun readLockSlowPath() {
+        // Increment the number of waiting readers first.
+        // If the current invocation should not suspend,
+        // the counter will be decremented back later.
+        waitingReaders.incrementAndGet()
+        // Check whether this operation should suspend. If not,
+        // try to decrement the counter of waiting readers and restart.
+        while (true) {
+            // Read the current state.
+            val s = state.value
+            // Is there a writer holding the lock or waiting for it?
+            if (s.wla || s.ww > 0) {
+                // The number of waiting readers was incremented
+                // correctly, wait for a reader lock in `sqsReaders`.
+                suspendCancellableCoroutineReusable<Unit> { cont ->
+                    sqsReaders.suspend(cont)
+                }
+                return
+            } else {
+                // A race was detected! The number of waiting readers increment
+                // was wrong, try to decrement it back. However, it could
+                // already become zero due to a concurrent `writeUnlock`
+                // which reads the number of waiting readers, puts `0`
+                // there, and resumes all these readers. In this case,
+                // it is guaranteed that a reader lock will be provided
+                // via `sqsReaders`, so we go wait for it.
+                while (true) {
+                    // Read the current number of waiting readers.
+                    val wr = waitingReaders.value
+                    // Is our invocation already handled by a concurrent
+                    // `writeUnlock` and a reader lock is going to be
+                    // passed via `sqsReaders`? Suspend in this case --
+                    // it is guaranteed that the lock will be provided
+                    // when this concurrent `writeUnlock` completes.
+                    if (wr == 0) {
+                        suspendCancellableCoroutineReusable<Unit> { cont ->
+                            sqsReaders.suspend(cont)
                         }
-                        // Otherwise, try to decrement the number of waiting
-                        // readers and retry the operation from the beginning.
-                        if (waitingReaders.compareAndSet(wr, wr - 1)) {
-                            // Try again starting from the fast path
-                            // as the state has changed.
-                            if (tryReadLock()) {
-                                cont.resume(Unit) { readUnlock() }
-                                return@sc
-                            }
-                            continue@retry
-                        }
+                        return
+                    }
+                    // Otherwise, try to decrement the number of waiting
+                    // readers and retry the operation from the beginning.
+                    if (waitingReaders.compareAndSet(wr, wr - 1)) {
+                        // Try again starting from the fast path
+                        // as the state has changed.
+                        readLock()
+                        return
                     }
                 }
             }
@@ -319,7 +313,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                     // Try to decrement the number of waiting writer and set the `WLA` flag.
                     // Resume the first waiting writer on success.
                     if (state.compareAndSet(s, state(0, true, s.ww - 1, false))) {
-                        if (!sqsWriters.resume(Unit)) writeUnlock(PRIORITIZE_WRITERS)
+                        sqsWriters.resume(Unit)
                         return
                     }
                 } else {
@@ -347,8 +341,8 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
      * support `tryReadLock()` the synchronous resumption mode should be used.
      */
     private inner class ReadersSQS : SegmentQueueSynchronizer<Unit>() {
-        override val resumeMode get() = ResumeMode.SYNC
-        override val cancellationMode get() = CancellationMode.SMART_SYNC
+        override val resumeMode get() = ResumeMode.ASYNC
+        override val cancellationMode get() = CancellationMode.SMART_ASYNC
 
         override fun onCancellation(): Boolean {
             // The cancellation logic here is pretty similar to
@@ -377,53 +371,29 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
     }
 
     internal suspend fun writeLock() {
-        if (tryWriteLock()) return
-        writeLockSlowPath()
-    }
-
-    internal fun tryWriteLock(): Boolean {
         // The algorithm is straightforward -- it reads the state,
         // checks that there is no reader or writer lock acquired,
         // and tries to change the state by setting the `WLA` flag.
+        // Otherwise, it increments the number of waiting writers
+        // and suspends in `sqsWriters` waiting for the lock.
         while (true) {
             // Read the current state.
             val s = state.value
             // Is there an active writer, a concurrent `writeUnlock` operation
-            // (thus, an uncompleted writer), or an active reader? Fail in this case.
-            if (s.wla || s.rwr || s.ar != 0) return false
-            assert { s.ww == 0 }
-            // Try to acquire the writer lock, re-try the operation if this CAS fails.
-            if (state.compareAndSet(s, state(0, true, 0, false)))
-                return true
-        }
-    }
-
-    private suspend fun writeLockSlowPath() = suspendCancellableCoroutineReusable<Unit> sc@ { cont ->
-        retry@while (true) {
-            // The algorithm is straightforward -- it reads the state,
-            // checks that there is no reader or writer lock acquired,
-            // and tries to change the state by setting the `WLA` flag.
-            // Otherwise, it increments the number of waiting writers
-            // and suspends in `sqsWriters` waiting for the lock.
-            while (true) {
-                // Read the current state.
-                val s = state.value
-                // Is there an active writer, a concurrent `writeUnlock` operation
-                // which is releasing readers (thus, an uncompleted writer), or an active reader?
-                if (!s.wla && !s.rwr && s.ar == 0) {
-                    // Try to acquire the writer lock, re-try the operation if this CAS fails.
-                    assert { s.ww == 0 }
-                    if (state.compareAndSet(s, state(0, true, 0, false))) {
-                        cont.resume(Unit) { writeUnlock() }
-                        return@sc
+            // which is releasing readers (thus, an uncompleted writer), or an active reader?
+            if (!s.wla && !s.rwr && s.ar == 0) {
+                // Try to acquire the writer lock, re-try the operation if this CAS fails.
+                assert { s.ww == 0 }
+                if (state.compareAndSet(s, state(0, true, 0, false)))
+                    return
+            } else {
+                // The operation has to suspend. Try to increment the number of waiting
+                // writers waiters and suspend in `sqsWriters`.
+                if (state.compareAndSet(s, state(s.ar, s.wla, s.ww + 1, s.rwr))) {
+                    suspendCancellableCoroutineReusable<Unit> { cont ->
+                        sqsWriters.suspend(cont)
                     }
-                } else {
-                    // The operation has to suspend. Try to increment the number of waiting
-                    // writers waiters and suspend in `sqsWriters`.
-                    if (state.compareAndSet(s, state(s.ar, s.wla, s.ww + 1, s.rwr))) {
-                        if (sqsWriters.suspend(cont)) return@sc
-                        else continue@retry
-                    }
+                    return
                 }
             }
         }
@@ -468,7 +438,7 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                 // Resume the next writer -- try to decrement the number of waiting
                 // writers and resume the first one in `sqsWriters` on success.
                 if (state.compareAndSet(s, state(0, true, s.ww - 1, false))) {
-                    if (!sqsWriters.resume(Unit)) writeUnlock(PRIORITIZE_WRITERS)
+                    sqsWriters.resume(Unit)
                     return
                 }
             } else {
@@ -481,14 +451,14 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                 // we do not add the corresponding code for simplicity since it does not improve the performance
                 // significantly but degrades code readability.
                 if (state.compareAndSet(s, state(0, false, s.ww, true))) {
-                    completeWaitingReadersResumption(false)
+                    completeWaitingReadersResumption()
                     return
                 }
             }
         }
     }
 
-    internal fun completeWaitingReadersResumption(xxx: Boolean): Boolean {
+    internal fun completeWaitingReadersResumption() {
         // This function is called after the `RWR` flag is set
         // and completes the resumption process. Note that
         // it also checks whether the next waiting writer should be
@@ -508,20 +478,8 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
             }
         }
         // After the readers are resumed logically, they should be resumed physically in `sqsReaders`.
-        var failedResumptions = 0
         repeat(wr) {
-            if (!sqsReaders.resume(Unit)) failedResumptions++
-        }
-        if (failedResumptions != 0) {
-            state.update { s ->
-                assert { !s.wla } // the writer lock cannot be acquired at this point.
-                assert { s.rwr } // the `RWR` flag should still be set.
-                if (s.ar < failedResumptions) {
-                    error("What should we do then??!")
-                } else {
-                    state(s.ar - failedResumptions, false, s.ww, true)
-                }
-            }
+            sqsReaders.resume(Unit)
         }
         // Once all the waiting readers are resumed, the `RWR` flag should be re-set.
         // It is possible that all the resumed readers have already completed their
@@ -532,14 +490,13 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
         var resumeWriter = false
         state.getAndUpdate { s ->
             resumeWriter = s.ar == 0 && s.ww > 0
-            val newWW =  if (resumeWriter && !xxx) s.ww - 1 else s.ww
-            state(s.ar, resumeWriter, newWW, false)
+            val wwUpd = if (resumeWriter) s.ww - 1 else s.ww
+            state(s.ar, resumeWriter, wwUpd, false)
         }
         if (resumeWriter) {
-            if (xxx) return false
-            if (!sqsWriters.resume(Unit)) writeUnlock(PRIORITIZE_WRITERS)
+            sqsWriters.resume(Unit)
             // Complete the procedure if the next writer is resumed.
-            return true
+            return
         }
         // Meanwhile, it could be possible for a writer to come and suspend due to the `RWR` flag.
         // After that, all the following readers suspend since a writer is waiting for the lock.
@@ -549,14 +506,14 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
         if (waitingReaders.value > 0) { // Is there a waiting reader?
             while (true) {
                 val s = state.value // Read the current state.
-                if (s.wla || s.ww > 0 || s.rwr) return true // Check whether the readers resumption is valid.
+                if (s.wla || s.ww > 0 || s.rwr) return // Check whether the readers resumption is valid.
                 // Try to set the `RWR` flag and resume the waiting readers.
                 if (state.compareAndSet(s, state(s.ar, false, 0, true))) {
-                    return completeWaitingReadersResumption(xxx)
+                    completeWaitingReadersResumption()
+                    return
                 }
             }
         }
-        return true
     }
 
     /**
@@ -566,8 +523,8 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
      * support `tryWriteLock()` the synchronous resumption mode should be used.
      */
     private inner class WritersSQS : SegmentQueueSynchronizer<Unit>() {
-        override val resumeMode get() = ResumeMode.SYNC
-        override val cancellationMode get() = CancellationMode.SMART_SYNC
+        override val resumeMode get() = ResumeMode.ASYNC
+        override val cancellationMode get() = CancellationMode.SMART_ASYNC
 
         override fun onCancellation(): Boolean {
             // In general, on cancellation, the algorithm tries to decrement the number of waiting writers.
@@ -588,7 +545,8 @@ internal class ReadWriteMutexImpl : ReadWriteMutex, Mutex {
                     // significantly but degrades code readability. Note that the same logic appears in `writeUnlock`,
                     // and the cancellation performance is less critical since cancellation does not come for free.
                     if (state.compareAndSet(s, state(s.ar, false, 0, true))) {
-                        return completeWaitingReadersResumption(true)
+                        completeWaitingReadersResumption()
+                        return true
                     }
                 } else {
                     if (state.compareAndSet(s, state(s.ar, s.wla, s.ww - 1, s.rwr)))

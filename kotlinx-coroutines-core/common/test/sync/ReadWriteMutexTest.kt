@@ -21,18 +21,6 @@ class ReadWriteMutexTest : TestBase() {
     }
 
     @Test
-    fun simpleTryLockSingleCoroutineTest() = runTest {
-        val m = ReadWriteMutex()
-        m.tryReadLock()
-        m.tryReadLock()
-        m.readUnlock()
-        m.readUnlock()
-        m.write.tryLock()
-        m.write.unlock()
-        m.readLock()
-    }
-
-    @Test
     fun multipleCoroutinesTest() = runTest {
         val m = ReadWriteMutex()
         m.readLock()

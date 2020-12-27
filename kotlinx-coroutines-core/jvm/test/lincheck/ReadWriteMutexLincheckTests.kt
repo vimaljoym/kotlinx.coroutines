@@ -15,16 +15,10 @@ import org.jetbrains.kotlinx.lincheck.paramgen.*
 import org.jetbrains.kotlinx.lincheck.strategy.managed.modelchecking.*
 import org.jetbrains.kotlinx.lincheck.verifier.*
 
-class ReadWriteMutexLincheckTest: AbstractLincheckTest() {
+class ReadWriteMutexLincheckTest : AbstractLincheckTest() {
     private val m = ReadWriteMutexImpl()
     private val readLockAcquired = IntArray(6)
     private val writeLockAcquired = BooleanArray(6)
-
-    @Operation
-    fun tryReadLock(@Param(gen = ThreadIdGen::class) threadId: Int): Boolean =
-        m.tryReadLock().also {  success ->
-            if (success) readLockAcquired[threadId]++
-        }
 
     @Operation(allowExtraSuspension = true, promptCancellation = false)
     suspend fun readLock(@Param(gen = ThreadIdGen::class) threadId: Int) {
@@ -39,17 +33,6 @@ class ReadWriteMutexLincheckTest: AbstractLincheckTest() {
         readLockAcquired[threadId]--
         return true
     }
-
-//    @Operation
-    fun tryWriteLock(@Param(gen = ThreadIdGen::class) threadId: Int) =
-        m.tryWriteLock().also { success ->
-            if (success) {
-                assert(!writeLockAcquired[threadId]) {
-                    "The mutex is not reentrant, this `writeLock()` invocation had to suspend"
-                }
-                writeLockAcquired[threadId] = true
-            }
-        }
 
     @Operation(allowExtraSuspension = true, promptCancellation = false)
     suspend fun writeLock(@Param(gen = ThreadIdGen::class) threadId: Int) {
@@ -76,8 +59,8 @@ class ReadWriteMutexLincheckTest: AbstractLincheckTest() {
         .actorsAfter(0)
         .sequentialSpecification(ReadWriteMutexLincheckTestSequential::class.java)
 
-//    override fun ModelCheckingOptions.customize(isStressTest: Boolean) =
-//        checkObstructionFreedom()
+    override fun ModelCheckingOptions.customize(isStressTest: Boolean) =
+        checkObstructionFreedom()
 }
 
 class ReadWriteMutexLincheckTestSequential : VerifierState() {
@@ -119,10 +102,11 @@ class ReadWriteMutexLincheckTestSequential : VerifierState() {
         return true
     }
 
-    override fun extractState() = "mutex=${m.state},rlaPerThread=${readLockAcquired.contentToString()},wlaPerThread=${writeLockAcquired.contentToString()}"
+    override fun extractState() =
+        "mutex=${m.state},rlaPerThread=${readLockAcquired.contentToString()},wlaPerThread=${writeLockAcquired.contentToString()}"
 }
 
-internal class ReadWriteMutexSequential{
+internal class ReadWriteMutexSequential {
     private var ar = 0
     private var wla = false
     private val wr = ArrayList<CancellableContinuation<Unit>>()
@@ -197,17 +181,6 @@ internal class ReadWriteMutexSequential{
 internal class ReadWriteMutexCounterLincheckTest : AbstractLincheckTest() {
     private val m = ReadWriteMutexImpl()
     private var c = 0
-
-    @Operation
-    fun incViaTryLock(): Int {
-        @Suppress("ControlFlowWithEmptyBody") // spin-lock here
-        while (!m.tryWriteLock()) {}
-        try {
-            return c++
-        } finally {
-            m.writeUnlock()
-        }
-    }
 
     @Operation(allowExtraSuspension = true, promptCancellation = false)
     suspend fun inc(): Int = m.write { c++ }
