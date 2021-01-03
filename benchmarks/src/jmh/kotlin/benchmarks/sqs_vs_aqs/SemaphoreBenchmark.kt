@@ -25,10 +25,10 @@ open class SemaphoreBenchmark {
     @Param("1", "2", "4", "8", "32", "128", "144", "100000")
     private var permits: Int = 0
 
-    @Param("50, 70, 100, 200", "400")
+    @Param("50", "70", "100", "200", "400")
     private var workIn: Int = 0
 
-    @Param("50, 70, 100, 200", "400")
+    @Param("50", "70", "100", "200", "400")
     private var workOut: Int = 0
 
     private lateinit var javaFairReentrantLock: ReentrantLock
