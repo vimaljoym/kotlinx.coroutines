@@ -9,8 +9,8 @@ import org.openjdk.jmh.annotations.*
 import java.util.concurrent.*
 import kotlin.concurrent.*
 
-@Warmup(iterations = 5, time = 1)
-@Measurement(iterations = 10, time = 1)
+@Warmup(iterations = 2, time = 1)
+@Measurement(iterations = 5, time = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
@@ -28,8 +28,8 @@ open class BarrierBenchmark {
 
     @Setup
     fun setup() {
-        javaBarriers = Array(ITERATIONS) { CyclicBarrier(threads) }
-        sqsBarriers = Array(ITERATIONS) { SQSBarrier(threads) }
+        javaBarriers = Array(TOTAL_AWAITS / threads) { CyclicBarrier(threads) }
+        sqsBarriers = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads) }
     }
 
     @Benchmark
@@ -45,7 +45,7 @@ open class BarrierBenchmark {
     private inline fun benchmark(crossinline awaitAction: (index: Int) -> Unit) {
         val threads = (1..threads).map {
             thread {
-                repeat(ITERATIONS) {
+                repeat(TOTAL_AWAITS / threads) {
                     awaitAction(it)
                     doGeomDistrWork(work)
                 }
@@ -55,5 +55,5 @@ open class BarrierBenchmark {
     }
 }
 
-private const val ITERATIONS = 100_000
+private const val TOTAL_AWAITS = 1_000_000
 
