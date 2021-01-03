@@ -229,7 +229,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         if (segment.cas(i, null, waiter)) {
             if (useBackoff) {
                 repeat(backoffSize) {
-                    if (it % 16 == 15 && segment.get(i) !== waiter) {
+                    if (it % 32 == 0 && segment.get(i) !== waiter) {
                         backoffSize = (backoffSize * 2).coerceAtMost(MAX_BACKOFF)
                         return true
                     }
@@ -728,7 +728,7 @@ internal expect fun <T> resumeWaiter(waiter: Any, value: T)
 internal expect fun suspendWaiter(waiter: Any)
 
 @SharedImmutable
-private val SEGMENT_SIZE = systemProp("kotlinx.coroutines.sqs.segmentSize", 128)
+private val SEGMENT_SIZE = systemProp("kotlinx.coroutines.sqs.segmentSize", 16)
 @SharedImmutable
 private val MAX_SPIN_CYCLES = systemProp("kotlinx.coroutines.sqs.maxSpinCycles", 100)
 @SharedImmutable
@@ -748,4 +748,4 @@ private const val TRY_RESUME_SUCCESS = 0
 private const val TRY_RESUME_FAIL_CANCELLED = 1
 private const val TRY_RESUME_FAIL_BROKEN = 2
 
-private val MAX_BACKOFF = systemProp("kotlinx.coroutines.sqs.maxBackoff", 1024)
+private val MAX_BACKOFF = systemProp("kotlinx.coroutines.sqs.maxBackoff", 10_000)

@@ -8,7 +8,11 @@ import kotlinx.atomicfu.*
 import kotlinx.coroutines.internal.*
 
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
-internal class SQSBarrier(val parties: Int) : SegmentQueueSynchronizer<Unit>() {
+internal class SQSBarrier(
+    private val parties: Int,
+    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
+    override val useBackoff: Boolean
+) : SegmentQueueSynchronizer<Unit>() {
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.ASYNC
 

@@ -11,7 +11,7 @@ import kotlin.test.*
 class SQSSemaphoreStressTest {
     @Test(timeout = 30_000)
     fun testSync() {
-        val s = SQSSemaphoreSync(1)
+        val s = SQSSemaphoreSync(1, true)
         var c = 0
         (1..T).map {
             thread {
@@ -27,7 +27,7 @@ class SQSSemaphoreStressTest {
 
     @Test(timeout = 30_000)
     fun testAsync() {
-        val s = SQSSemaphoreAsync(1)
+        val s = SQSSemaphoreAsync(1, true)
         var c = 0
         (1..T).map {
             thread {

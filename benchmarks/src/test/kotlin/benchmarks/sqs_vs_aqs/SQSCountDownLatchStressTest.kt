@@ -11,7 +11,7 @@ import kotlin.test.*
 class SQSCountDownLatchStressTest {
     @Test(timeout = 30_000)
     fun test() {
-        val cdl = SQSCountDownLatch(T * N)
+        val cdl = SQSCountDownLatch(T * N, true)
         (1..T).map {
             thread {
                 repeat(N) { cdl.countDown() }

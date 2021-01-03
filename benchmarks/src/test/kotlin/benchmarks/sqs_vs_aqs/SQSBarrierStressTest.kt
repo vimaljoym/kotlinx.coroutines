@@ -11,7 +11,7 @@ import kotlin.test.*
 class SQSBarrierStressTest {
     @Test(timeout = 30_000)
     fun test() {
-        val barriers = Array(N) { SQSBarrier(T) }
+        val barriers = Array(N) { SQSBarrier(T, true) }
         (1..T).map { t ->
             thread {
                 repeat(N) {

@@ -17,20 +17,27 @@ import kotlin.concurrent.*
 @Fork(1)
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
 open class BarrierBenchmark {
-    @Param("0", "100", "1000")
+    // @Param("50", "100", "200")
+    @Param("100")
     private var work = 0
 
-    @Param("1", "2", "4", "8", "16", "32", "64", "128", "144", "256", "512")
+    // @Param("1", "2", "4", "8", "16", "32", "64", "128")
+    @Param("1", "2", "4", "8", "16")
     private var threads = 0
 
     private lateinit var javaBarriers: Array<CyclicBarrier>
     private lateinit var sqsBarriers: Array<SQSBarrier>
+    private lateinit var sqsBarriersWithBackoff: Array<SQSBarrier>
 
     @Setup
     fun setup() {
         javaBarriers = Array(TOTAL_AWAITS / threads) { CyclicBarrier(threads) }
-        sqsBarriers = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads) }
+        sqsBarriers = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads, false) }
+        sqsBarriersWithBackoff = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads, true) }
     }
+
+    @Benchmark
+    fun baseline() = benchmark {}
 
     @Benchmark
     fun java() = benchmark {
@@ -42,18 +49,25 @@ open class BarrierBenchmark {
         sqsBarriers[it].arrive()
     }
 
-    private inline fun benchmark(crossinline awaitAction: (index: Int) -> Unit) {
-        val threads = (1..threads).map {
+    @Benchmark
+    fun sqsWithBackoff() = benchmark {
+        sqsBarriersWithBackoff[it].arrive()
+    }
+
+    private inline fun benchmark(crossinline await: (index: Int) -> Unit) {
+        val phaser = Phaser(threads)
+        repeat(threads) {
             thread {
                 repeat(TOTAL_AWAITS / threads) {
-                    awaitAction(it)
+                    await(it)
                     doGeomDistrWork(work)
                 }
+                phaser.arrive()
             }
         }
-        threads.forEach { it.join() }
+        phaser.awaitAdvance(0)
     }
 }
 
-private const val TOTAL_AWAITS = 1_000_000
+private const val TOTAL_AWAITS = 100_000
 

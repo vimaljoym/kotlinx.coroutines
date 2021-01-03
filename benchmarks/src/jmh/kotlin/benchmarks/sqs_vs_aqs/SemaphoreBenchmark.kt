@@ -10,7 +10,7 @@ import java.util.concurrent.*
 import java.util.concurrent.locks.*
 import kotlin.concurrent.*
 
-@Warmup(iterations = 3, time = 1)
+@Warmup(iterations = 2, time = 1)
 @Measurement(iterations = 10, time = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -39,7 +39,9 @@ open class SemaphoreBenchmark {
     private lateinit var javaFairSemaphore: Semaphore
     private lateinit var javaUnfairSemaphore: Semaphore
     private lateinit var sqsSemaphoreSync: SQSSemaphoreSync
+    private lateinit var sqsSemaphoreSyncWithBackoff: SQSSemaphoreSync
     private lateinit var sqsSemaphoreAsync: SQSSemaphoreAsync
+    private lateinit var sqsSemaphoreAsyncWithBackoff: SQSSemaphoreAsync
 
     @Setup
     fun setup() {
@@ -47,8 +49,10 @@ open class SemaphoreBenchmark {
         javaUnfairReentrantLock = ReentrantLock(false)
         javaFairSemaphore = Semaphore(permits, true)
         javaUnfairSemaphore = Semaphore(permits, false)
-        sqsSemaphoreSync = SQSSemaphoreSync(permits)
-        sqsSemaphoreAsync = SQSSemaphoreAsync(permits)
+        sqsSemaphoreSync = SQSSemaphoreSync(permits, false)
+        sqsSemaphoreSyncWithBackoff = SQSSemaphoreSync(permits, true)
+        sqsSemaphoreAsync = SQSSemaphoreAsync(permits, false)
+        sqsSemaphoreAsyncWithBackoff = SQSSemaphoreAsync(permits, true)
     }
 
     @Benchmark
@@ -75,6 +79,12 @@ open class SemaphoreBenchmark {
 
     @Benchmark
     fun sqsSemaphoreAsync() = benchmark({ sqsSemaphoreAsync.acquire() }, { sqsSemaphoreAsync.release() })
+
+    @Benchmark
+    fun sqsSemaphoreSyncWithBackoff() = benchmark({ sqsSemaphoreSyncWithBackoff.acquire() }, { sqsSemaphoreSyncWithBackoff.release() })
+
+    @Benchmark
+    fun sqsSemaphoreAsyncWithBackoff() = benchmark({ sqsSemaphoreAsyncWithBackoff.acquire() }, { sqsSemaphoreAsyncWithBackoff.release() })
 
     private inline fun benchmark(crossinline acquire: () -> Unit, crossinline release: () -> Unit) {
         val phaser = Phaser(threads)

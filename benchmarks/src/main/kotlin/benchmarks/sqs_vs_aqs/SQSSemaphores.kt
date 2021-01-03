@@ -8,12 +8,13 @@ import kotlinx.atomicfu.*
 import kotlinx.coroutines.internal.*
 
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
-internal class SQSSemaphoreSync(permits: Int) : SegmentQueueSynchronizer<Unit>() {
+internal class SQSSemaphoreSync(
+    permits: Int,
+    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
+    override val useBackoff: Boolean
+) : SegmentQueueSynchronizer<Unit>() {
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.SYNC
-
-    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
-    override val useBackoff: Boolean get() = false
 
     private val availablePermits = atomic(permits)
 
@@ -35,12 +36,13 @@ internal class SQSSemaphoreSync(permits: Int) : SegmentQueueSynchronizer<Unit>()
 }
 
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
-internal class SQSSemaphoreAsync(permits: Int) : SegmentQueueSynchronizer<Unit>() {
+internal class SQSSemaphoreAsync(
+    permits: Int,
+    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
+    override val useBackoff: Boolean
+) : SegmentQueueSynchronizer<Unit>() {
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.ASYNC
-
-    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
-    override val useBackoff: Boolean get() = false
 
     private val availablePermits = atomic(permits)
 
