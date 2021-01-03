@@ -9,7 +9,7 @@ import kotlin.concurrent.*
 import kotlin.test.*
 
 class SQSSemaphoreStressTest {
-    @Test
+    @Test(timeout = 30_000)
     fun testSync() {
         val s = SQSSemaphoreSync(1)
         var c = 0
@@ -25,7 +25,7 @@ class SQSSemaphoreStressTest {
         assertEquals(N / T * T, c)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun testAsync() {
         val s = SQSSemaphoreAsync(1)
         var c = 0

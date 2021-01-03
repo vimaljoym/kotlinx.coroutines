@@ -15,18 +15,22 @@ import kotlin.concurrent.*
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-@Fork(3)
+@Fork(1)
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
 open class SemaphoreBenchmark {
-    @Param("1", "2", "4", "8", "16", "32", "64", "128")
+    // @Param("1", "2", "4", "8", "16", "32", "64", "128")
+    @Param("1", "2", "4", "8", "16")
     private var threads = 0
 
-    @Param("1", "4", "16", "64")
+    // @Param("1", "4", "16", "64")
+    @Param("1", "4")
     private var permits: Int = 0
 
+    // @Param("50", "100", "200")
     @Param("100")
     private var workIn: Int = 0
 
+    // @Param("50", "100", "200")
     @Param("100")
     private var workOut: Int = 0
 
@@ -47,12 +51,12 @@ open class SemaphoreBenchmark {
         sqsSemaphoreAsync = SQSSemaphoreAsync(permits)
     }
 
-    @Benchmark
+    // @Benchmark
     fun javaReentrantLockFair() =
         if (permits == 1) benchmark({ javaFairReentrantLock.lock() }, { javaFairReentrantLock.unlock() })
         else benchmark({}, {})
 
-    @Benchmark
+    // @Benchmark
     fun javaReentrantLockUnfair() =
         if (permits == 1) benchmark({ javaUnfairReentrantLock.lock() }, { javaUnfairReentrantLock.unlock() })
         else benchmark({}, {})
@@ -86,4 +90,4 @@ open class SemaphoreBenchmark {
     }
 }
 
-private const val TOTAL_OPERATIONS = 1_000_000
+private const val TOTAL_OPERATIONS = 100_000

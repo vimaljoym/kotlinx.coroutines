@@ -456,11 +456,12 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                 cellState is Continuation<*> -> {
                     // Resume the continuation and mark the cell
                     // as `RESUMED` to avoid memory leaks.
-                    (cellState as Continuation<T>).resume(value)
                     segment.set(i, RESUMED)
+                    (cellState as Continuation<T>).resume(value)
                     return TRY_RESUME_SUCCESS
                 }
                 else -> {
+                    segment.set(i, RESUMED)
                     resumeWaiter(cellState, value)
                     return TRY_RESUME_SUCCESS
                 }
