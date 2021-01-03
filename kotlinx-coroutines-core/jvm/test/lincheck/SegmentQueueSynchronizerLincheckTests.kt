@@ -205,7 +205,7 @@ abstract class AsyncSemaphoreLincheckTestBase(
 ) : AbstractLincheckTest() {
     private val s = semaphore
 
-    @Operation(allowExtraSuspension = true, promptCancellation = true)
+    @Operation(allowExtraSuspension = true, promptCancellation = false)
     suspend fun acquire() = s.acquire()
 
     @Operation(handleExceptionsAsResult = [IllegalStateException::class])
@@ -331,7 +331,7 @@ internal abstract class CountDownLatchLincheckTestBase(
     @Operation
     fun remaining() = cdl.remaining()
 
-    @Operation(promptCancellation = true)
+    @Operation(promptCancellation = false)
     suspend fun await() = cdl.await()
 
     override fun <O : Options<O, *>> O.customize(isStressTest: Boolean): O =
@@ -455,7 +455,7 @@ internal class Barrier(private val parties: Int) : SegmentQueueSynchronizer<Unit
 abstract class BarrierLincheckTestBase(parties: Int, val seqSpec: KClass<*>) : AbstractLincheckTest() {
     private val b = Barrier(parties)
 
-    @Operation(promptCancellation = true)
+    @Operation(promptCancellation = false)
     suspend fun arrive() = b.arrive()
 
     override fun <O : Options<O, *>> O.customize(isStressTest: Boolean) =
@@ -768,7 +768,7 @@ abstract class BlockingPoolLincheckTestBase(val p: BlockingPool<Unit>) : Abstrac
     fun put() = p.put(Unit)
 
     @Suppress("NullChecksToSafeCall")
-    @Operation(allowExtraSuspension = true, promptCancellation = true)
+    @Operation(allowExtraSuspension = true, promptCancellation = false)
     suspend fun retrieve() = p.retrieve()
 
     @StateRepresentation
@@ -878,7 +878,7 @@ class BlockingQueueSmartLincheckTest : AbstractLincheckTest() {
     @Operation
     fun send(element: Int) = c.send(element)
 
-    @Operation(promptCancellation = true)
+    @Operation(allowExtraSuspension=true, promptCancellation = false)
     suspend fun receive() = c.receive()
 
     override fun <O : Options<O, *>> O.customize(isStressTest: Boolean): O =
