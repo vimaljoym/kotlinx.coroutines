@@ -728,7 +728,7 @@ internal expect fun <T> resumeWaiter(waiter: Any, value: T)
 internal expect fun suspendWaiter(waiter: Any)
 
 @SharedImmutable
-private val SEGMENT_SIZE = systemProp("kotlinx.coroutines.sqs.segmentSize", 16)
+private val SEGMENT_SIZE = systemProp("kotlinx.coroutines.sqs.segmentSize", 128)
 @SharedImmutable
 private val MAX_SPIN_CYCLES = systemProp("kotlinx.coroutines.sqs.maxSpinCycles", 100)
 @SharedImmutable

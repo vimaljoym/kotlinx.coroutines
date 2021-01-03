@@ -13,7 +13,7 @@ internal class SQSSemaphoreSync(permits: Int) : SegmentQueueSynchronizer<Unit>()
     override val resumeMode get() = ResumeMode.SYNC
 
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
-    override val useBackoff: Boolean get() = true
+    override val useBackoff: Boolean get() = false
 
     private val availablePermits = atomic(permits)
 
@@ -40,7 +40,7 @@ internal class SQSSemaphoreAsync(permits: Int) : SegmentQueueSynchronizer<Unit>(
     override val resumeMode get() = ResumeMode.ASYNC
 
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
-    override val useBackoff: Boolean get() = true
+    override val useBackoff: Boolean get() = false
 
     private val availablePermits = atomic(permits)
 
