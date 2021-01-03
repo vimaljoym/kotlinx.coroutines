@@ -148,6 +148,9 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         tail = atomic(s)
     }
 
+    protected open val useBackoff: Boolean = false
+    private var backoffSize = MAX_BACKOFF / 2
+
     /**
      * Specifies whether [resume] should work in
      * [synchronous][SYNC] or [asynchronous][ASYNC] mode.
@@ -224,6 +227,15 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         // this is the regular path.
         val i = (enqIdx % SEGMENT_SIZE).toInt()
         if (segment.cas(i, null, waiter)) {
+            if (useBackoff) {
+                repeat(backoffSize) {
+                    if (it % 16 == 15 && segment.get(i) !== waiter) {
+                        backoffSize = (backoffSize * 2).coerceAtMost(MAX_BACKOFF)
+                        return true
+                    }
+                }
+                backoffSize = (backoffSize + 1) / 2
+            }
             // The continuation is successfully installed, and
             // `resume` cannot break the cell now, so that this
             // suspension is successful.
@@ -735,3 +747,5 @@ private val RESUMED = Symbol("RESUMED")
 private const val TRY_RESUME_SUCCESS = 0
 private const val TRY_RESUME_FAIL_CANCELLED = 1
 private const val TRY_RESUME_FAIL_BROKEN = 2
+
+private val MAX_BACKOFF = systemProp("kotlinx.coroutines.sqs.maxBackoff", 1024)

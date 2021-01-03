@@ -12,6 +12,9 @@ internal class SQSSemaphoreSync(permits: Int) : SegmentQueueSynchronizer<Unit>()
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.SYNC
 
+    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
+    override val useBackoff: Boolean get() = true
+
     private val availablePermits = atomic(permits)
 
     fun acquire() {
@@ -35,6 +38,9 @@ internal class SQSSemaphoreSync(permits: Int) : SegmentQueueSynchronizer<Unit>()
 internal class SQSSemaphoreAsync(permits: Int) : SegmentQueueSynchronizer<Unit>() {
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.ASYNC
+
+    @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
+    override val useBackoff: Boolean get() = true
 
     private val availablePermits = atomic(permits)
 
