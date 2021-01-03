@@ -29,18 +29,6 @@ open class CountDownLatchBenchmark {
     @Param("100")
     private var waiters = 0
 
-    private lateinit var cdlJava: CountDownLatch
-    private lateinit var cdlSqs: SQSCountDownLatch
-    private lateinit var cdlSqsWithBackoff: SQSCountDownLatch
-
-    @Setup
-    fun setup() {
-        // we have to round the total work
-        cdlJava = CountDownLatch(TOTAL_OPERATIONS / threads * threads)
-        cdlSqs = SQSCountDownLatch(TOTAL_OPERATIONS / threads * threads, false)
-        cdlSqsWithBackoff = SQSCountDownLatch(TOTAL_OPERATIONS / threads * threads, true)
-    }
-
     @Benchmark
     fun baseline() {
         val phaser = Phaser(threads)
@@ -56,13 +44,22 @@ open class CountDownLatchBenchmark {
     }
 
     @Benchmark
-    fun java() = benchmark({ cdlJava.await() }, { cdlJava.countDown() })
+    fun java() {
+        val cdl = CountDownLatch(TOTAL_OPERATIONS / threads * threads)
+        benchmark({ cdl.await() }, { cdl.countDown() })
+    }
 
     @Benchmark
-    fun sqs() = benchmark({ cdlSqs.await() }, { cdlSqs.countDown() })
+    fun sqs() {
+        val cdl = SQSCountDownLatch(TOTAL_OPERATIONS / threads * threads, false)
+        benchmark({ cdl.await() }, { cdl.countDown() })
+    }
 
     @Benchmark
-    fun sqsWithBackoff() = benchmark({ cdlSqs.await() }, { cdlSqsWithBackoff.countDown() })
+    fun sqsWithBackoff() {
+        val cdl = SQSCountDownLatch(TOTAL_OPERATIONS / threads * threads, true)
+        benchmark({ cdl.await() }, { cdl.countDown() })
+    }
 
     private inline fun benchmark(crossinline await: () -> Unit, crossinline countDown: () -> Unit) {
         val phaser = Phaser(waiters)

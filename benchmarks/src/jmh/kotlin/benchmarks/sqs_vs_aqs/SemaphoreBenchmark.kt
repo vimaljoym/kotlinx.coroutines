@@ -34,57 +34,57 @@ open class SemaphoreBenchmark {
     @Param("100")
     private var workOut: Int = 0
 
-    private lateinit var javaFairReentrantLock: ReentrantLock
-    private lateinit var javaUnfairReentrantLock: ReentrantLock
-    private lateinit var javaFairSemaphore: Semaphore
-    private lateinit var javaUnfairSemaphore: Semaphore
-    private lateinit var sqsSemaphoreSync: SQSSemaphoreSync
-    private lateinit var sqsSemaphoreSyncWithBackoff: SQSSemaphoreSync
-    private lateinit var sqsSemaphoreAsync: SQSSemaphoreAsync
-    private lateinit var sqsSemaphoreAsyncWithBackoff: SQSSemaphoreAsync
-
-    @Setup
-    fun setup() {
-        javaFairReentrantLock = ReentrantLock(true)
-        javaUnfairReentrantLock = ReentrantLock(false)
-        javaFairSemaphore = Semaphore(permits, true)
-        javaUnfairSemaphore = Semaphore(permits, false)
-        sqsSemaphoreSync = SQSSemaphoreSync(permits, false)
-        sqsSemaphoreSyncWithBackoff = SQSSemaphoreSync(permits, true)
-        sqsSemaphoreAsync = SQSSemaphoreAsync(permits, false)
-        sqsSemaphoreAsyncWithBackoff = SQSSemaphoreAsync(permits, true)
-    }
-
     @Benchmark
     fun baseline() = benchmark({}, {})
 
     // @Benchmark
-    fun javaReentrantLockFair() =
-        if (permits == 1) benchmark({ javaFairReentrantLock.lock() }, { javaFairReentrantLock.unlock() })
-        else {}
+    fun javaReentrantLockFair() {
+        if (permits != 1) return
+        val lock = ReentrantLock(true)
+        benchmark({ lock.lock() }, { lock.unlock() })
+    }
 
     // @Benchmark
-    fun javaReentrantLockUnfair() =
-        if (permits == 1) benchmark({ javaUnfairReentrantLock.lock() }, { javaUnfairReentrantLock.unlock() })
-        else {}
+    fun javaReentrantLockUnfair() {
+        if (permits != 1) return
+        val lock = ReentrantLock(false)
+        benchmark({ lock.lock() }, { lock.unlock() })
+    }
+
 
     @Benchmark
-    fun javaSemaphoreFair() = benchmark({ javaFairSemaphore.acquire() }, { javaFairSemaphore.release() })
+    fun javaSemaphoreFair() {
+        val semaphore = Semaphore(permits, true)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })
+    }
 
     @Benchmark
-    fun javaSemaphoreUnfair() = benchmark({ javaUnfairSemaphore.acquire() }, { javaUnfairSemaphore.release() })
+    fun javaSemaphoreUnfair() {
+        val semaphore = Semaphore(permits, false)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })
+    }
 
     @Benchmark
-    fun sqsSemaphoreSync() = benchmark({ sqsSemaphoreSync.acquire() }, { sqsSemaphoreSync.release() })
+    fun sqsSemaphoreSync() {
+        val semaphore = SQSSemaphoreSync(permits, false)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })
+    }
 
     @Benchmark
-    fun sqsSemaphoreAsync() = benchmark({ sqsSemaphoreAsync.acquire() }, { sqsSemaphoreAsync.release() })
+    fun sqsSemaphoreAsync() {
+        val semaphore = SQSSemaphoreAsync(permits, false)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })
+    }
 
     @Benchmark
-    fun sqsSemaphoreSyncWithBackoff() = benchmark({ sqsSemaphoreSyncWithBackoff.acquire() }, { sqsSemaphoreSyncWithBackoff.release() })
+    fun sqsSemaphoreSyncWithBackoff() {
+        val semaphore = SQSSemaphoreSync(permits, true)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })    }
 
     @Benchmark
-    fun sqsSemaphoreAsyncWithBackoff() = benchmark({ sqsSemaphoreAsyncWithBackoff.acquire() }, { sqsSemaphoreAsyncWithBackoff.release() })
+    fun sqsSemaphoreAsyncWithBackoff() {
+        val semaphore = SQSSemaphoreAsync(permits, true)
+        benchmark({ semaphore.acquire() }, { semaphore.release() })    }
 
     private inline fun benchmark(crossinline acquire: () -> Unit, crossinline release: () -> Unit) {
         val phaser = Phaser(threads)

@@ -16,23 +16,23 @@ internal class SQSBarrier(
     @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
     override val resumeMode get() = ResumeMode.ASYNC
 
-    private val arrived = atomic(0L)
+    private val remaining = atomic(parties)
 
     fun arrive() {
-        if (arrived.value > parties) error("TODO")
-        val a = arrived.incrementAndGet()
+        val a = remaining.decrementAndGet()
         when {
             // Should we suspend?
-            a < parties -> {
+            a > 0 -> {
                 suspendCurrentThread()
             }
             // Are we the last party?
-            a == parties.toLong() -> {
+            a == 0 -> {
                 // Resume all waiters.
                 repeat(parties - 1) {
                     resume(Unit)
                 }
             }
+            else -> error { "At most $parties parties are allowed, but an extra arrive() call has been detected." }
         }
     }
 }

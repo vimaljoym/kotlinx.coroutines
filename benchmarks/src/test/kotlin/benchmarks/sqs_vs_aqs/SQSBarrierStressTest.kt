@@ -12,7 +12,7 @@ class SQSBarrierStressTest {
     @Test(timeout = 30_000)
     fun test() {
         val barriers = Array(N) { SQSBarrier(T, true) }
-        (1..T).map { t ->
+        (1..T).map {
             thread {
                 repeat(N) {
                     barriers[it].arrive()
