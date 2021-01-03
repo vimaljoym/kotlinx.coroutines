@@ -628,7 +628,7 @@ internal class BlockingQueuePool<T: Any> : SegmentQueueSynchronizer<T>(), Blocki
     fun stateRepresentation(): String {
         val elementsBetweenIndices = mutableListOf<Any?>()
         val first = min(retrieveIdx.value, insertIdx.value)
-        val last = max(retrieveIdx.value, insertIdx.value)
+        val last = kotlin.math.max(retrieveIdx.value, insertIdx.value)
         for (i in first until last) {
             elementsBetweenIndices.add(elements[i].value)
         }
