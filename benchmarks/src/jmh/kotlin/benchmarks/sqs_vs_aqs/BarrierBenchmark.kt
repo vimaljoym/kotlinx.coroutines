@@ -55,5 +55,5 @@ open class BarrierBenchmark {
     }
 }
 
-private const val ITERATIONS = 1_000_000
+private const val ITERATIONS = 100_000
 

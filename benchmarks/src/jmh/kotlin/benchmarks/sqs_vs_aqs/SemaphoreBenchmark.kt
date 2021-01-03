@@ -84,4 +84,4 @@ open class SemaphoreBenchmark {
     }
 }
 
-private const val TOTAL_OPERATIONS = 10_000_000
+private const val TOTAL_OPERATIONS = 1_000_000
