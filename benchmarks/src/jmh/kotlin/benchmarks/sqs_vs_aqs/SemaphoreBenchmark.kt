@@ -36,7 +36,6 @@ open class SemaphoreBenchmark {
     private lateinit var javaUnfairSemaphore: Semaphore
     private lateinit var sqsSemaphoreSync: SQSSemaphoreSync
     private lateinit var sqsSemaphoreAsync: SQSSemaphoreAsync
-    private lateinit var phaser: Phaser
 
     @Setup
     fun setup() {
@@ -46,17 +45,16 @@ open class SemaphoreBenchmark {
         javaUnfairSemaphore = Semaphore(permits, false)
         sqsSemaphoreSync = SQSSemaphoreSync(permits)
         sqsSemaphoreAsync = SQSSemaphoreAsync(permits)
-        phaser = Phaser(threads)
     }
 
     @Benchmark
     fun javaReentrantLockFair() =
-        if (threads == 1) benchmark({ javaFairReentrantLock.lock() }, { javaFairReentrantLock.unlock() })
+        if (permits == 1) benchmark({ javaFairReentrantLock.lock() }, { javaFairReentrantLock.unlock() })
         else benchmark({}, {})
 
     @Benchmark
     fun javaReentrantLockUnfair() =
-        if (threads == 1) benchmark({ javaUnfairReentrantLock.lock() }, { javaUnfairReentrantLock.unlock() })
+        if (permits == 1) benchmark({ javaUnfairReentrantLock.lock() }, { javaUnfairReentrantLock.unlock() })
         else benchmark({}, {})
 
     @Benchmark
@@ -72,6 +70,7 @@ open class SemaphoreBenchmark {
     fun sqsSemaphoreAsync() = benchmark({ sqsSemaphoreAsync.acquire() }, { sqsSemaphoreAsync.release() })
 
     private inline fun benchmark(crossinline acquire: () -> Unit, crossinline release: () -> Unit) {
+        val phaser = Phaser(threads)
         repeat(threads) {
             thread {
                 repeat(TOTAL_OPERATIONS / threads) {
