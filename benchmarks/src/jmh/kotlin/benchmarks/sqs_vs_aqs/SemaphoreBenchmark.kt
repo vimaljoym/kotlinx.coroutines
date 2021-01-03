@@ -51,15 +51,18 @@ open class SemaphoreBenchmark {
         sqsSemaphoreAsync = SQSSemaphoreAsync(permits)
     }
 
+    @Benchmark
+    fun baseline() = benchmark({}, {})
+
     // @Benchmark
     fun javaReentrantLockFair() =
         if (permits == 1) benchmark({ javaFairReentrantLock.lock() }, { javaFairReentrantLock.unlock() })
-        else benchmark({}, {})
+        else {}
 
     // @Benchmark
     fun javaReentrantLockUnfair() =
         if (permits == 1) benchmark({ javaUnfairReentrantLock.lock() }, { javaUnfairReentrantLock.unlock() })
-        else benchmark({}, {})
+        else {}
 
     @Benchmark
     fun javaSemaphoreFair() = benchmark({ javaFairSemaphore.acquire() }, { javaFairSemaphore.release() })
