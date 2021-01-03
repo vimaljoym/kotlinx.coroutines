@@ -627,9 +627,9 @@ internal class BlockingQueuePool<T: Any> : SegmentQueueSynchronizer<T>(), Blocki
 
     fun stateRepresentation(): String {
         val elementsBetweenIndices = mutableListOf<Any?>()
-        val curRetrieveIdx = retrieveIdx.value
-        val curInsertIdx = insertIdx.value
-        for (i in min(curRetrieveIdx, curInsertIdx) until max(curRetrieveIdx, curInsertIdx)) {
+        val first = min(retrieveIdx.value, insertIdx.value)
+        val last = max(retrieveIdx.value, insertIdx.value)
+        for (i in first until last) {
             elementsBetweenIndices.add(elements[i].value)
         }
         return "availableElements=${availableElements.value}," +
