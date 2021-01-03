@@ -5,7 +5,6 @@
 package benchmarks.sqs_vs_aqs
 
 import benchmarks.common.*
-import org.junit.*
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.*
 import java.util.concurrent.locks.*
@@ -38,7 +37,7 @@ open class SemaphoreBenchmark {
     private lateinit var sqsSemaphoreSync: SQSSemaphoreSync
     private lateinit var sqsSemaphoreAsync: SQSSemaphoreAsync
 
-    @Before
+    @Setup
     fun setup() {
         javaFairReentrantLock = ReentrantLock(true)
         javaUnfairReentrantLock = ReentrantLock(false)

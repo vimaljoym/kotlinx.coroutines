@@ -5,7 +5,6 @@
 package benchmarks.sqs_vs_aqs
 
 import benchmarks.common.*
-import org.junit.*
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.*
 import kotlin.concurrent.*
@@ -30,7 +29,7 @@ open class CountDownLatchBenchmark {
     private lateinit var cdlJava: CountDownLatch
     private lateinit var cdlSqs: SQSCountDownLatch
 
-    @Before
+    @Setup
     fun setup() {
         // we have to round the total work
         cdlJava = CountDownLatch(TOTAL_OPERATIONS / threads * threads)
