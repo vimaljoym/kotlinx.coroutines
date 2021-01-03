@@ -5,3 +5,4 @@
 package kotlinx.coroutines.internal
 
 internal actual fun <T> resumeWaiter(waiter: Any, value: T): Unit = error("Not supported")
+internal actual fun suspendWaiter(waiter: Any): Unit = error("Not supported")

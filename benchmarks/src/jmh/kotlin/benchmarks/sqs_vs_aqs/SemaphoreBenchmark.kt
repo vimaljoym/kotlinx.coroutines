@@ -10,24 +10,24 @@ import java.util.concurrent.*
 import java.util.concurrent.locks.*
 import kotlin.concurrent.*
 
-@Warmup(iterations = 2, time = 1)
-@Measurement(iterations = 5, time = 1)
+@Warmup(iterations = 3, time = 1)
+@Measurement(iterations = 10, time = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
-@Fork(1)
+@Fork(3)
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
 open class SemaphoreBenchmark {
-    @Param("1", "2", "4", "8", "16", "32", "64", "128", "144", "256", "512")
+    @Param("1", "2", "4", "8", "16", "32", "64", "128")
     private var threads = 0
 
-    @Param("1", "2", "4", "8", "32", "128", "144", "100000")
+    @Param("1", "4", "16", "64")
     private var permits: Int = 0
 
-    @Param("50", "70", "100", "200", "400")
+    @Param("100")
     private var workIn: Int = 0
 
-    @Param("50", "70", "100", "200", "400")
+    @Param("100")
     private var workOut: Int = 0
 
     private lateinit var javaFairReentrantLock: ReentrantLock
@@ -36,6 +36,7 @@ open class SemaphoreBenchmark {
     private lateinit var javaUnfairSemaphore: Semaphore
     private lateinit var sqsSemaphoreSync: SQSSemaphoreSync
     private lateinit var sqsSemaphoreAsync: SQSSemaphoreAsync
+    private lateinit var phaser: Phaser
 
     @Setup
     fun setup() {
@@ -45,6 +46,7 @@ open class SemaphoreBenchmark {
         javaUnfairSemaphore = Semaphore(permits, false)
         sqsSemaphoreSync = SQSSemaphoreSync(permits)
         sqsSemaphoreAsync = SQSSemaphoreAsync(permits)
+        phaser = Phaser(threads)
     }
 
     @Benchmark
@@ -70,7 +72,7 @@ open class SemaphoreBenchmark {
     fun sqsSemaphoreAsync() = benchmark({ sqsSemaphoreAsync.acquire() }, { sqsSemaphoreAsync.release() })
 
     private inline fun benchmark(crossinline acquire: () -> Unit, crossinline release: () -> Unit) {
-        (1..threads).map {
+        repeat(threads) {
             thread {
                 repeat(TOTAL_OPERATIONS / threads) {
                     acquire()
@@ -78,8 +80,10 @@ open class SemaphoreBenchmark {
                     release()
                     doGeomDistrWork(workOut)
                 }
+                phaser.arrive()
             }
-        }.forEach { it.join() }
+        }
+        phaser.awaitAdvance(0)
     }
 }
 

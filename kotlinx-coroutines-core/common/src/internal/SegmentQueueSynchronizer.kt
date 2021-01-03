@@ -230,6 +230,10 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // Add a cancellation handler if required and finish.
             if (waiter is CancellableContinuation<*>) {
                 waiter.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
+            } else if (waiter !is Continuation<*>) {
+                do {
+                    suspendWaiter(waiter)
+                } while (segment.get(i) === waiter)
             }
             return true
         }
@@ -252,9 +256,6 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                 is Continuation<*> -> {
                     waiter as Continuation<T>
                     waiter.resume(value)
-                }
-                else -> {
-                    resumeWaiter(waiter, value)
                 }
             }
             return true
@@ -710,6 +711,8 @@ private class SQSSegment(id: Long, prev: SQSSegment?, pointers: Int) : Segment<S
 private class WrappedContinuationValue(val cont: Continuation<*>)
 
 internal expect fun <T> resumeWaiter(waiter: Any, value: T)
+// allows spurious resumptions
+internal expect fun suspendWaiter(waiter: Any)
 
 @SharedImmutable
 private val SEGMENT_SIZE = systemProp("kotlinx.coroutines.sqs.segmentSize", 16)
