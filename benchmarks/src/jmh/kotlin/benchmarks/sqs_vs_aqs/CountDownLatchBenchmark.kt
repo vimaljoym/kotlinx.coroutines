@@ -18,7 +18,7 @@ import kotlin.concurrent.*
 @Fork(1)
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
 open class CountDownLatchBenchmark {
-    @Param("0", "100", "1000", "10000")
+    @Param("0", "100", "1000")
     private var work = 0
 
     @Param("1", "2", "4", "8", "16", "32", "64", "128", "144", "256", "512")
