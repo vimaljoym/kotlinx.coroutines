@@ -234,7 +234,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                         return true
                     }
                 }
-                backoffSize = (backoffSize + 1) / 2
+                backoffSize = (backoffSize + 1) * 7 / 8
             }
             // The continuation is successfully installed, and
             // `resume` cannot break the cell now, so that this
