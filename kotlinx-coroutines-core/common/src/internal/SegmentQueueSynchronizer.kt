@@ -588,7 +588,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             }
             curIdx++
             if (curIdx == (curSegment.id + 1) * SEGMENT_SIZE)
-                curSegment = curSegment.next!!
+                curSegment = curSegment.next ?: break
         }
         return "enqIdx=${enqIdx.value},deqIdx=${deqIdx.value},waiters=$waiters"
     }
