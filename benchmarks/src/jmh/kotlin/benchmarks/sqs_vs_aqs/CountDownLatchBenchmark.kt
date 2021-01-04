@@ -55,12 +55,6 @@ open class CountDownLatchBenchmark {
         benchmark({ cdl.await() }, { cdl.countDown() })
     }
 
-    @Benchmark
-    fun sqsWithBackoff() {
-        val cdl = SQSCountDownLatch(TOTAL_OPERATIONS / threads * threads, true)
-        benchmark({ cdl.await() }, { cdl.countDown() })
-    }
-
     private inline fun benchmark(crossinline await: () -> Unit, crossinline countDown: () -> Unit) {
         val phaser = Phaser(waiters)
         repeat(waiters) {

@@ -7,6 +7,7 @@ package benchmarks.sqs_vs_aqs
 import benchmarks.common.*
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.*
+import java.util.concurrent.atomic.*
 import kotlin.concurrent.*
 
 @Warmup(iterations = 2, time = 1)
@@ -17,8 +18,8 @@ import kotlin.concurrent.*
 @Fork(1)
 @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
 open class BarrierBenchmark {
-     @Param("100", "1000")
-//    @Param("100")
+    // @Param("100", "1000")
+    @Param("100")
     private var work = 0
 
     // @Param("1", "2", "4", "8", "16", "32", "64", "128")
@@ -26,7 +27,16 @@ open class BarrierBenchmark {
     private var threads = 0
 
     @Benchmark
-    fun baseline(): Unit = benchmark {}
+    fun counter() {
+        val t = threads
+        val count = AtomicLong()
+        benchmark { round ->
+            var c = count.incrementAndGet()
+            while (c < t * (round + 1)) {
+                c = count.get()
+            }
+        }
+    }
 
     @Benchmark
     fun java() {
@@ -39,14 +49,6 @@ open class BarrierBenchmark {
     @Benchmark
     fun sqs() {
         val barriers = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads, false) }
-        benchmark {
-            barriers[it].arrive()
-        }
-    }
-
-    @Benchmark
-    fun sqsWithBackoff() {
-        val barriers = Array(TOTAL_AWAITS / threads) { SQSBarrier(threads, true) }
         benchmark {
             barriers[it].arrive()
         }
