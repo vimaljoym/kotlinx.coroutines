@@ -25,7 +25,7 @@ open class CountDownLatchBenchmark {
     @Param("1", "2", "4", "8", "16")
     private var threads = 0
 
-    // @Param("0", "100", "1000")
+    // @Param("1", "100", "1000")
     @Param("100")
     private var waiters = 0
 
