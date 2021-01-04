@@ -20,7 +20,7 @@ abstract class SemaphoreLincheckTestBase(
     @Operation
     fun tryAcquire() = this.semaphore.tryAcquire()
 
-    @Operation(promptCancellation = true)
+    @Operation(promptCancellation = false)
     suspend fun acquire() = this.semaphore.acquire()
 
     @Operation(handleExceptionsAsResult = [IllegalStateException::class])

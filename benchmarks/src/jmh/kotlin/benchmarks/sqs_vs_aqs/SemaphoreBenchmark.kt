@@ -79,7 +79,8 @@ open class SemaphoreBenchmark {
     @Benchmark
     fun sqsSemaphoreSyncWithBackoff() {
         val semaphore = SQSSemaphoreSync(permits, true)
-        benchmark({ semaphore.acquire() }, { semaphore.release() })    }
+        benchmark({ semaphore.acquire() }, { semaphore.release() })
+    }
 
     @Benchmark
     fun sqsSemaphoreAsyncWithBackoff() {

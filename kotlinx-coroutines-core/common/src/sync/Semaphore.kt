@@ -104,7 +104,7 @@ public suspend inline fun <T> Semaphore.withPermit(action: () -> T): T {
     }
 }
 
-private class SemaphoreImpl(
+internal open class SemaphoreImpl(
     private val permits: Int,
     acquiredPermits: Int
 ) : SegmentQueueSynchronizer<Unit>(), Semaphore {
