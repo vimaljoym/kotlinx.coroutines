@@ -104,7 +104,7 @@ public suspend inline fun <T> Semaphore.withPermit(action: () -> T): T {
     }
 }
 
-internal open class SemaphoreImpl(
+private class SemaphoreImpl(
     private val permits: Int,
     acquiredPermits: Int
 ) : SegmentQueueSynchronizer<Unit>(), Semaphore {
@@ -123,23 +123,37 @@ internal open class SemaphoreImpl(
     private val _availablePermits = atomic(permits - acquiredPermits)
     override val availablePermits: Int get() = max(_availablePermits.value, 0)
 
-    override fun tryAcquire(): Boolean = _availablePermits.loop { p ->
-        // Try to decrement the number of available
-        // permits if it is greater than zero.
-        if (p <= 0) return false
-        if (_availablePermits.compareAndSet(p, p - 1)) return true
+    override fun tryAcquire(): Boolean {
+        while (true) {
+            // Get the current number of available permits.
+            val p = _availablePermits.value
+            // Is the number of available permits greater
+            // than the maximal one because of an incorrect
+            // `release()` call without a preceding `acquire()`?
+            // Change it to `permits` and start from the beginning.
+            if (p > permits) {
+                coerceAvailablePermitsAtMaximum()
+                continue
+            }
+            // Try to decrement the number of available
+            // permits if it is greater than zero.
+            if (p <= 0) return false
+            if (_availablePermits.compareAndSet(p, p - 1)) return true
+        }
     }
 
     override suspend fun acquire() {
-        // Decrement the number of available permits.
-        val p = _availablePermits.getAndDecrement()
-        // Is the permit acquired?
-        if (p > 0) return
-        // Try to suspend otherwise.
-        // While it looks better when the following function is inlined,
-        // it is important to make `suspend` function invocations in a way
-        // so that the tail-call optimization can be applied here.
-        acquireSlowPath()
+        while (true) {
+            // Decrement the number of available permits.
+            val p = decPermits()
+            // Is the permit acquired?
+            if (p > 0) return
+            // Try to suspend otherwise.
+            // While it looks better when the following function is inlined,
+            // it is important to make `suspend` function invocations in a way
+            // so that the tail-call optimization can be applied here.
+            return acquireSlowPath()
+        }
     }
 
     private suspend fun acquireSlowPath() = suspendCancellableCoroutineReusable<Unit> sc@{ cont ->
@@ -150,7 +164,7 @@ internal open class SemaphoreImpl(
             // due to the synchronous resumption mode.
             // Re-tart the whole `acquire`, and decrement
             // the number of available permits at first.
-            val p = _availablePermits.getAndDecrement()
+            val p = decPermits()
             // Is the permit acquired?
             if (p > 0) {
                 cont.resume(Unit)
@@ -161,13 +175,37 @@ internal open class SemaphoreImpl(
         }
     }
 
+    /**
+     * Decrements the number of available permits
+     * and ensures that it is not greater than [permits]
+     * at the point of decrement. The last may happen
+     * due to an incorrect `release()` call without
+     * a preceding `acquire()`.
+     */
+    private fun decPermits(): Int {
+        while (true) {
+            // Decrement the number of available permits.
+            val p = _availablePermits.getAndDecrement()
+            // Is the number of available permits greater
+            // than the maximal one because of an incorrect
+            // `release()` call without a preceding `acquire()`?
+            if (p > permits) continue
+            // The number of permits is correct, return it.
+            return p
+        }
+    }
+
     override fun release() {
         while (true) {
-            // Increment the number of available permits
-            // if it does not exceed the maximum value.
-            val p = _availablePermits.getAndUpdate { cur ->
-                check(cur < permits) { "The number of released permits cannot be greater than $permits" }
-                cur + 1
+            // Increment the number of available permits.
+            val p = _availablePermits.getAndIncrement()
+            // Is this `release` call correct and does not
+            // exceed the maximal number of permits?
+            if (p >= permits) {
+                // Revert the number of available permits
+                // back to the correct one and fail with error.
+                coerceAvailablePermitsAtMaximum()
+                error("The number of released permits cannot be greater than $permits")
             }
             // Is there a waiter that should be resumed?
             if (p >= 0) return
@@ -187,5 +225,18 @@ internal open class SemaphoreImpl(
         // exception if there was a successful concurrent
         // `release()` invoked without acquiring a permit.
         release()
+    }
+
+    /**
+     * Changes the number of available permits to
+     * [permits] if it became greater due to an
+     * incorrect [release] call.
+     */
+    private fun coerceAvailablePermitsAtMaximum() {
+        while (true) {
+            val cur = _availablePermits.value
+            if (cur <= permits) break
+            if (_availablePermits.compareAndSet(cur, permits)) break
+        }
     }
 }

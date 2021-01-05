@@ -59,7 +59,7 @@ open class SemaphoreSequential(
 
     fun release() {
         while (true) {
-            check(availablePermits < permits || !boundMaxPermits)
+            if (boundMaxPermits) check(availablePermits < permits)
             availablePermits++
             if (availablePermits > 0) return
             val w = waiters.removeAt(0)
