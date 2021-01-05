@@ -5,9 +5,11 @@
 package benchmarks
 
 import benchmarks.common.*
+import benchmarks.sync.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.scheduling.*
 import kotlinx.coroutines.sync.*
+import kotlinx.coroutines.sync.Semaphore
 import org.openjdk.jmh.annotations.*
 import java.util.concurrent.*
 
@@ -17,7 +19,8 @@ import java.util.concurrent.*
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 @State(Scope.Benchmark)
 @Fork(1)
-class MutexVsSemaphoreBenchmark {
+@Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
+open class MutexVsSemaphoreBenchmark {
     // @Param("1", "2", "4", "8", "16", "18", "32", "36", "54", "64", "72", "90", "108", "128")
     @Param("1", "2", "4", "8", "16")
     private var threads = 0
@@ -50,18 +53,14 @@ class MutexVsSemaphoreBenchmark {
     }
 
     @Benchmark
-    fun sqs() {
+    fun sqsSync() {
         val s = Semaphore(permits = 1)
         benchmark( { s.acquire() }, { s.release() })
     }
 
     @Benchmark
-    @Suppress("INVISIBLE_REFERENCE", "INVISIBLE_MEMBER")
-    fun sqsBackoff() {
-        val s = object : SemaphoreImpl(permits = 1, acquiredPermits = 0) {
-            @Suppress("CANNOT_OVERRIDE_INVISIBLE_MEMBER")
-            override val useBackoff: Boolean get() = true
-        }
+    fun sqsAsync() {
+        val s = AsyncSemaphore(permits = 1)
         benchmark( { s.acquire() }, { s.release() })
     }
 
