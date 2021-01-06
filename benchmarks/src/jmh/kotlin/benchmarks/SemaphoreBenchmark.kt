@@ -14,8 +14,8 @@ import org.openjdk.jmh.annotations.*
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
 
-@Warmup(iterations = 3, time = 500, timeUnit = TimeUnit.MICROSECONDS)
-@Measurement(iterations = 10, time = 500, timeUnit = TimeUnit.MICROSECONDS)
+@Warmup(iterations = 2, time = 500, timeUnit = TimeUnit.MICROSECONDS)
+@Measurement(iterations = 5, time = 500, timeUnit = TimeUnit.MICROSECONDS)
 @Fork(value = 1)
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -89,4 +89,4 @@ enum class SemaphoreBenchDispatcherCreator(val create: (parallelism: Int) -> Cor
 
 private const val WORK_INSIDE = 80
 private const val WORK_OUTSIDE = 40
-private const val BATCH_SIZE = 1000000
+private const val BATCH_SIZE = 1_000_000

@@ -88,7 +88,7 @@ open class SemaphoreBenchmark {
         benchmark({ semaphore.acquire() }, { semaphore.release() })    }
 
     private inline fun benchmark(crossinline acquire: () -> Unit, crossinline release: () -> Unit) {
-        val phaser = Phaser(threads)
+        val cdl = CountDownLatch(threads)
         repeat(threads) {
             thread {
                 repeat(TOTAL_OPERATIONS / threads) {
@@ -97,11 +97,11 @@ open class SemaphoreBenchmark {
                     release()
                     doGeomDistrWork(workOut)
                 }
-                phaser.arrive()
+                cdl.countDown()
             }
         }
-        phaser.awaitAdvance(0)
+        cdl.await()
     }
 }
 
-private const val TOTAL_OPERATIONS = 100_000
+private const val TOTAL_OPERATIONS = 1_000_000

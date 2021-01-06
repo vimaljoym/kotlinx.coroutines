@@ -7,7 +7,7 @@ package kotlinx.coroutines.internal
 
 import java.util.concurrent.locks.*
 
-internal actual fun <T> resumeWaiter(waiter: Any, value: T) {
+internal actual fun resumeWaiter(waiter: Any) {
     waiter as? Thread ?: error("Unexpected waiter type")
     LockSupport.unpark(waiter)
 }
@@ -16,4 +16,7 @@ internal actual fun suspendWaiter(waiter: Any): Unit = LockSupport.park()
 
 internal fun SegmentQueueSynchronizer<Unit>.suspendCurrentThread(): Boolean =
     suspend(Thread.currentThread())
+
+internal fun <T : Any> SegmentQueueSynchronizer<T>.suspendCurrentThread(): T? =
+    suspendBlocking(Thread.currentThread())
 

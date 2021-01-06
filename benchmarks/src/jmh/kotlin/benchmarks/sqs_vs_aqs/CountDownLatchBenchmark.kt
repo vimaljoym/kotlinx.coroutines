@@ -31,16 +31,16 @@ open class CountDownLatchBenchmark {
 
     @Benchmark
     fun baseline() {
-        val phaser = Phaser(threads)
+        val cdl = CountDownLatch(threads)
         repeat(threads) {
             thread {
                 repeat(TOTAL_OPERATIONS / threads) {
                     doGeomDistrWork(work)
                 }
-                phaser.arrive()
+                cdl.countDown()
             }
         }
-        phaser.awaitAdvance(0)
+        cdl.await()
     }
 
     @Benchmark

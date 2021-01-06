@@ -277,6 +277,72 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         return false
     }
 
+    @Suppress("UNCHECKED_CAST")
+    internal fun suspendBlocking(waiter: Any): T? {
+        // Increment `enqIdx` and find the segment
+        // with the corresponding id. It is guaranteed
+        // that this segment is not removed since at
+        // least the cell for this [suspend] invocation
+        // is not in the `CANCELLED` state.
+        val curTail = this.tail.value
+        val enqIdx = enqIdx.getAndIncrement()
+        val segment = this.tail.findSegmentAndMoveForward(id = enqIdx / SEGMENT_SIZE, startFrom = curTail,
+            createNewSegment = ::createSegment).segment
+        assert { segment.id == enqIdx / SEGMENT_SIZE }
+        // Try to install the continuation in the cell,
+        // this is the regular path.
+        val i = (enqIdx % SEGMENT_SIZE).toInt()
+        if (segment.cas(i, null, waiter)) {
+            if (useBackoff) {
+                repeat(backoffSize) {
+                    if (it % 32 == 0 && segment.get(i) !== waiter) {
+                        backoffSize = (backoffSize * 2).coerceAtMost(MAX_BACKOFF)
+                        return segment.get(i) as T
+                    }
+                }
+                backoffSize = (backoffSize + 1) * 7 / 8
+            }
+            // The continuation is successfully installed, and
+            // `resume` cannot break the cell now, so that this
+            // suspension is successful.
+            // Add a cancellation handler if required and finish.
+            if (waiter is CancellableContinuation<*>) {
+                waiter.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
+            } else if (waiter !is Continuation<*>) {
+                do {
+                    suspendWaiter(waiter)
+                } while (segment.get(i) === waiter)
+            }
+            return segment.get(i) as T
+        }
+        // The continuation installation has failed. This happens
+        // if a concurrent `resume` came earlier to this cell and put
+        // its value into it. Note that in `SYNC` resumption mode
+        // this concurrent `resume` can mark the cell as broken.
+        //
+        // Try to grab the value if the cell is not in the `BROKEN` state.
+        val value = segment.get(i)
+        if (value !== BROKEN && segment.cas(i, value, TAKEN)) {
+            // The elimination is successfully performed,
+            // resume the continuation with the value and complete.
+            value as T
+            when (waiter) {
+                is CancellableContinuation<*> -> {
+                    waiter as CancellableContinuation<T>
+                    waiter.resume(value, { returnValue(value) }) // TODO do we really need this?
+                }
+                is Continuation<*> -> {
+                    waiter as Continuation<T>
+                    waiter.resume(value)
+                }
+            }
+            return value
+        }
+        // The cell is broken, this can happen only in `SYNC` resumption mode.
+        assert { resumeMode == SYNC && segment.get(i) === BROKEN }
+        return null
+    }
+
     /**
      * Puts the specified continuation into the waiting queue, and returns `true` on success.
      * Since [suspend] and [resume] can be invoked concurrently (similarly to `park` and `unpark`
@@ -473,8 +539,8 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
                     return TRY_RESUME_SUCCESS
                 }
                 else -> {
-                    segment.set(i, RESUMED)
-                    resumeWaiter(cellState, value)
+                    segment.set(i, value)
+                    resumeWaiter(cellState)
                     return TRY_RESUME_SUCCESS
                 }
             }
@@ -723,7 +789,7 @@ private class SQSSegment(id: Long, prev: SQSSegment?, pointers: Int) : Segment<S
  */
 private class WrappedContinuationValue(val cont: Continuation<*>)
 
-internal expect fun <T> resumeWaiter(waiter: Any, value: T)
+internal expect fun resumeWaiter(waiter: Any)
 // allows spurious resumptions
 internal expect fun suspendWaiter(waiter: Any)
 
