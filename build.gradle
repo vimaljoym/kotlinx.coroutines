@@ -53,6 +53,7 @@ buildscript {
     }
 
     repositories {
+        mavenLocal()
         jcenter()
         maven {
             url "https://kotlin.bintray.com/kotlinx"
