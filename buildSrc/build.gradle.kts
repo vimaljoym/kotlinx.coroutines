@@ -40,7 +40,7 @@ val props = Properties().apply {
 fun version(target: String): String {
     // Intercept reading from properties file
     if (target == "kotlin") {
-        val snapshotVersion = properties["kotlin_snapshot_version"]
+        val snapshotVersion = properties["kotlin_snapshot_version"] ?: System.getProperty("kotlin_snapshot_version")
         if (snapshotVersion != null) return snapshotVersion.toString()
     }
     return props.getProperty("${target}_version")
