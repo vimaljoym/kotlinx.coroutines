@@ -10,6 +10,7 @@ plugins {
 
 val cacheRedirectorEnabled = System.getenv("CACHE_REDIRECTOR")?.toBoolean() == true
 val buildSnapshotTrain = properties["build_snapshot_train"]?.toString()?.toBoolean() == true
+println("buildSnapshotTrain = $buildSnapshotTrain")
 
 repositories {
     if (cacheRedirectorEnabled) {
@@ -36,6 +37,10 @@ kotlinDslPluginOptions {
 val props = Properties().apply {
     file("../gradle.properties").inputStream().use { load(it) }
 }
+
+println("=====")
+println(properties.entries.joinToString("\n") { "${it.key} = ${it.value}" })
+println("=====")
 
 fun version(target: String): String {
     // Intercept reading from properties file
