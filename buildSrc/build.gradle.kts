@@ -43,6 +43,12 @@ println(properties.entries.joinToString("\n") { "${it.key} = ${it.value}" })
 println("=====")
 
 fun version(target: String): String {
+    val result = versionImpl(target)
+    println("version($target) = $result")
+    return result
+}
+
+fun versionImpl(target: String): String {
     // Intercept reading from properties file
     if (target == "kotlin") {
         val snapshotVersion = properties["kotlin_snapshot_version"] ?: System.getProperty("kotlin_snapshot_version")
