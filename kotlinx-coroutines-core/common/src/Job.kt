@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+ * Copyright 2016-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
  */
 
 @file:JvmMultifileClass
@@ -467,6 +467,14 @@ public interface ParentJob : Job {
 @InternalCoroutinesApi
 @Deprecated(level = DeprecationLevel.ERROR, message = "This is internal API and may be removed in the future releases")
 public interface ChildHandle : DisposableHandle {
+
+    /**
+     * Returns the parent of the current parent-child relationship.
+     * @suppress **This is unstable API and it is subject to change.**
+     */
+    @InternalCoroutinesApi
+    public val parent: Job?
+
     /**
      * Child is cancelling its parent by invoking this method.
      * This method is invoked by the child twice. The first time child report its root cause as soon as possible,
@@ -660,6 +668,9 @@ private fun Throwable?.orCancellation(job: Job): Throwable = this ?: JobCancella
  */
 @InternalCoroutinesApi
 public object NonDisposableHandle : DisposableHandle, ChildHandle {
+
+    override val parent: Job? get() = null
+
     /**
      * Does not do anything.
      * @suppress
