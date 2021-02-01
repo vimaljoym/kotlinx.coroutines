@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2020 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+ * Copyright 2016-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
  */
 
 @file:JvmMultifileClass
@@ -167,7 +167,6 @@ public suspend fun <T> withContext(
         }
         // SLOW PATH -- use new dispatcher
         val coroutine = DispatchedCoroutine(newContext, uCont)
-        coroutine.initParentJob()
         block.startCoroutineCancellable(coroutine, coroutine)
         coroutine.getResult()
     }
