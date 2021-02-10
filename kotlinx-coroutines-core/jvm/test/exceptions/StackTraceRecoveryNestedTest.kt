@@ -1,5 +1,5 @@
 /*
- * Copyright 2016-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
+ * Copyright 2016-2021 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license.
  */
 
 @file:Suppress("DeferredResultUnused")
@@ -58,7 +58,7 @@ class StackTraceRecoveryNestedTest : TestBase() {
         try {
             rootAsync.awaitRootLevel()
         } catch (e: RecoverableTestException) {
-            e.verifyException("await\$suspendImpl", "awaitRootLevel")
+            e.verifyException("awaitRootLevel")
             finish(8)
         }
     }
