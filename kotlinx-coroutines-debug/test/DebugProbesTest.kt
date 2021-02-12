@@ -5,6 +5,7 @@ package kotlinx.coroutines.debug
 
 import kotlinx.coroutines.*
 import org.junit.Test
+import org.junit.Ignore
 import java.util.concurrent.*
 import kotlin.test.*
 
@@ -15,6 +16,7 @@ class DebugProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testAsync() = runTest {
         val deferred = createDeferred()
         val traces = listOf(
@@ -33,6 +35,7 @@ class DebugProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testAsyncWithProbes() = DebugProbes.withDebugProbes {
         DebugProbes.sanitizeStackTraces = false
         runTest {
@@ -64,6 +67,7 @@ class DebugProbesTest : DebugTestBase() {
     }
 
     @Test
+    @Ignore
     fun testAsyncWithSanitizedProbes() = DebugProbes.withDebugProbes {
         DebugProbes.sanitizeStackTraces = true
         runTest {
