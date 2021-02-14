@@ -4,17 +4,18 @@
 
 package benchmarks.sqs_vs_aqs
 
+import java.util.concurrent.*
 import kotlin.concurrent.*
 import kotlin.test.*
 
 class LockTests {
-    @Test(timeout = 1_000)
+    @Test(timeout = 10_000)
     fun clhLockTest() {
         val lock = CLHLock()
         lockTest({ lock.lock() }, {  lock.unlock() })
     }
 
-    @Test(timeout = 1_000)
+    @Test(timeout = 10_000)
     fun mcsLockTest() {
         val lock = MCSLock()
         lockTest({ lock.lock() }, {  lock.unlock() })
@@ -22,8 +23,10 @@ class LockTests {
 
     private fun lockTest(lock: () -> Unit, unlock: () -> Unit) {
         var c = 0
+        val barrier = CyclicBarrier(THREADS)
         (1..THREADS).map {
             thread {
+                barrier.await()
                 repeat(N) {
                     lock()
                     c++
@@ -34,5 +37,5 @@ class LockTests {
         assertEquals(N * THREADS, c)
     }
 }
-private val THREADS = 10
-private val N = 10_000
+private val THREADS = 4
+private val N = 100_000

@@ -29,6 +29,7 @@ internal class CLHLock {
 
     fun lock() {
         val qnode = myNode.get()
+        qnode.cleanThread()
         val pred = tail.getAndSet(qnode)
         myPred.set(pred)
         if (pred.setCurThread()) {
