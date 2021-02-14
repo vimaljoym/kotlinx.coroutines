@@ -149,7 +149,7 @@ internal abstract class ConcurrentLinkedListNode<N : ConcurrentLinkedListNode<N>
      */
     fun remove() {
         assert { removed } // The node should be logically removed at first.
-        assert { !isTail } // The physical tail cannot be removed.
+        if (isTail) return // The physical tail cannot be removed.
         while (true) {
             // Read `next` and `prev` pointers ignoring logically removed nodes.
             val prev = leftmostAliveNode
@@ -175,7 +175,7 @@ internal abstract class ConcurrentLinkedListNode<N : ConcurrentLinkedListNode<N>
     private val rightmostAliveNode: N get() {
         assert { !isTail } // Should not be invoked on the tail node
         var cur = next!!
-        while (cur.removed)
+        while (cur.removed && !cur.isTail)
             cur = cur.next!!
         return cur
     }
@@ -203,13 +203,13 @@ internal abstract class Segment<S : Segment<S>>(val id: Long, prev: S?, pointers
      * There are no pointers to this segment from outside, and
      * it is not a physical tail in the linked list of segments.
      */
-    override val removed get() = !isTail && cleanedAndPointers.value == maxSlots
+    override val removed get() = cleanedAndPointers.value == maxSlots
 
     // increments the number of pointers if this segment is not logically removed.
-    internal fun tryIncPointers() = cleanedAndPointers.addConditionally(1 shl POINTERS_SHIFT) { it != maxSlots || isTail }
+    internal fun tryIncPointers() = cleanedAndPointers.addConditionally(1 shl POINTERS_SHIFT) { it != maxSlots }
 
     // returns `true` if this segment is logically removed after the decrement.
-    internal fun decPointers() = cleanedAndPointers.addAndGet(-(1 shl POINTERS_SHIFT)) == maxSlots && !isTail
+    internal fun decPointers() = cleanedAndPointers.addAndGet(-(1 shl POINTERS_SHIFT)) == maxSlots
 
     /**
      * Invoked on each slot clean-up; should not be invoked twice for the same slot.

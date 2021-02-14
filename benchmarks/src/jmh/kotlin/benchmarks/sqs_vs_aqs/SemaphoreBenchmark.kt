@@ -51,6 +51,19 @@ open class SemaphoreBenchmark {
         benchmark({ lock.lock() }, { lock.unlock() })
     }
 
+    // @Benchmark
+    fun clhLock() {
+        if (permits != 1) return
+        val lock = CLHLock()
+        benchmark({ lock.lock() }, { lock.unlock() })
+    }
+
+    // @Benchmark
+    fun mcsLock() {
+        if (permits != 1) return
+        val lock = MCSLock()
+        benchmark({ lock.lock() }, { lock.unlock() })
+    }
 
     @Benchmark
     fun javaSemaphoreFair() {

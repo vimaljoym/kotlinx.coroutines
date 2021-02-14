@@ -85,4 +85,4 @@ open class BlockingPoolBenchmark {
     }
 }
 
-private const val TOTAL_OPERATIONS = 1_000_000
+private const val TOTAL_OPERATIONS = 100_000

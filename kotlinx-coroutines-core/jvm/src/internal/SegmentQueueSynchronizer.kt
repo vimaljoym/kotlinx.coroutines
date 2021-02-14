@@ -15,7 +15,7 @@ internal actual fun resumeWaiter(waiter: Any) {
 internal actual fun suspendWaiter(waiter: Any): Unit = LockSupport.park()
 
 internal fun SegmentQueueSynchronizer<Unit>.suspendCurrentThread(): Boolean =
-    suspend(Thread.currentThread())
+    suspendBlocking(Thread.currentThread()) != null
 
 internal fun <T : Any> SegmentQueueSynchronizer<T>.suspendCurrentThread(): T? =
     suspendBlocking(Thread.currentThread())

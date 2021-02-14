@@ -16,8 +16,8 @@ import org.jetbrains.kotlinx.lincheck.annotations.*
 import org.jetbrains.kotlinx.lincheck.annotations.Operation
 import org.jetbrains.kotlinx.lincheck.strategy.managed.modelchecking.*
 import org.jetbrains.kotlinx.lincheck.verifier.*
-import java.lang.Integer.*
 import java.util.concurrent.*
+import kotlin.collections.ArrayList
 import kotlin.coroutines.*
 import kotlin.reflect.*
 
@@ -69,7 +69,7 @@ internal class AsyncSemaphore(permits: Int) : SegmentQueueSynchronizer<Unit>(), 
     }
 
     // For prompt cancellation.
-    override fun returnValue(value: Unit)  = release()
+    override fun returnValue(value: Unit) = release()
 }
 
 /**
@@ -225,8 +225,12 @@ class AsyncSemaphore2LincheckTest : AsyncSemaphoreLincheckTestBase(AsyncSemaphor
 class AsyncSemaphoreSmart1LincheckTest : AsyncSemaphoreLincheckTestBase(AsyncSemaphoreSmart(1), SemaphoreUnboundedSequential1::class)
 class AsyncSemaphoreSmart2LincheckTest : AsyncSemaphoreLincheckTestBase(AsyncSemaphoreSmart(2), SemaphoreUnboundedSequential2::class)
 
-class SyncSemaphoreSmart1LincheckTest : SemaphoreLincheckTestBase(SyncSemaphoreSmart(1), SemaphoreUnboundedSequential1::class)
-class SyncSemaphoreSmart2LincheckTest : SemaphoreLincheckTestBase(SyncSemaphoreSmart(2), SemaphoreUnboundedSequential2::class)
+class SyncSemaphoreSmart1LincheckTest : SemaphoreLincheckTestBase(SyncSemaphoreSmart(1), SemaphoreUnboundedSequential1::class) {
+    override fun ModelCheckingOptions.customize(isStressTest: Boolean) = checkObstructionFreedom(false)
+}
+class SyncSemaphoreSmart2LincheckTest : SemaphoreLincheckTestBase(SyncSemaphoreSmart(2), SemaphoreUnboundedSequential2::class) {
+    override fun ModelCheckingOptions.customize(isStressTest: Boolean) = checkObstructionFreedom(false)
+}
 
 
 // ####################################

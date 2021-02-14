@@ -212,7 +212,7 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
     }
 
     @Suppress("UNCHECKED_CAST")
-    internal fun suspend(waiter: Any): Boolean {
+    internal fun suspend(cont: Continuation<T>): Boolean {
         // Increment `enqIdx` and find the segment
         // with the corresponding id. It is guaranteed
         // that this segment is not removed since at
@@ -226,10 +226,10 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         // Try to install the continuation in the cell,
         // this is the regular path.
         val i = (enqIdx % SEGMENT_SIZE).toInt()
-        if (segment.cas(i, null, waiter)) {
+        if (segment.cas(i, null, cont)) {
             if (useBackoff) {
                 repeat(backoffSize) {
-                    if (it % 32 == 0 && segment.get(i) !== waiter) {
+                    if (it % 32 == 0 && segment.get(i) !== cont) {
                         backoffSize = (backoffSize * 2).coerceAtMost(MAX_BACKOFF)
                         return true
                     }
@@ -240,12 +240,8 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // `resume` cannot break the cell now, so that this
             // suspension is successful.
             // Add a cancellation handler if required and finish.
-            if (waiter is CancellableContinuation<*>) {
-                waiter.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
-            } else if (waiter !is Continuation<*>) {
-                do {
-                    suspendWaiter(waiter)
-                } while (segment.get(i) === waiter)
+            if (cont is CancellableContinuation<*>) {
+                cont.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
             }
             return true
         }
@@ -260,14 +256,13 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // The elimination is successfully performed,
             // resume the continuation with the value and complete.
             value as T
-            when (waiter) {
+            when (cont) {
                 is CancellableContinuation<*> -> {
-                    waiter as CancellableContinuation<T>
-                    waiter.resume(value, { returnValue(value) }) // TODO do we really need this?
+                    cont as CancellableContinuation<T>
+                    cont.resume(value, { returnValue(value) }) // TODO do we really need this?
                 }
-                is Continuation<*> -> {
-                    waiter as Continuation<T>
-                    waiter.resume(value)
+                else -> {
+                    cont.resume(value)
                 }
             }
             return true
@@ -305,14 +300,9 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
             // The continuation is successfully installed, and
             // `resume` cannot break the cell now, so that this
             // suspension is successful.
-            // Add a cancellation handler if required and finish.
-            if (waiter is CancellableContinuation<*>) {
-                waiter.invokeOnCancellation(SQSCancellationHandler(segment, i).asHandler)
-            } else if (waiter !is Continuation<*>) {
-                do {
-                    suspendWaiter(waiter)
-                } while (segment.get(i) === waiter)
-            }
+            do {
+                suspendWaiter(waiter)
+            } while (segment.get(i) === waiter)
             return segment.get(i) as T
         }
         // The continuation installation has failed. This happens
@@ -323,38 +313,13 @@ internal abstract class SegmentQueueSynchronizer<T : Any> {
         // Try to grab the value if the cell is not in the `BROKEN` state.
         val value = segment.get(i)
         if (value !== BROKEN && segment.cas(i, value, TAKEN)) {
-            // The elimination is successfully performed,
-            // resume the continuation with the value and complete.
-            value as T
-            when (waiter) {
-                is CancellableContinuation<*> -> {
-                    waiter as CancellableContinuation<T>
-                    waiter.resume(value, { returnValue(value) }) // TODO do we really need this?
-                }
-                is Continuation<*> -> {
-                    waiter as Continuation<T>
-                    waiter.resume(value)
-                }
-            }
-            return value
+            // The elimination is successfully performed.
+            return value as T
         }
         // The cell is broken, this can happen only in `SYNC` resumption mode.
         assert { resumeMode == SYNC && segment.get(i) === BROKEN }
         return null
     }
-
-    /**
-     * Puts the specified continuation into the waiting queue, and returns `true` on success.
-     * Since [suspend] and [resume] can be invoked concurrently (similarly to `park` and `unpark`
-     * for threads), it is possible that [resume] comes earlier. In this case, [resume] puts the
-     * value into the cell, and [suspend] is supposed to come and grab the value after that.
-     * However, if the [synchronous][SYNC] resumption mode is used, the concurrent [resume]
-     * can mark the cell as [broken][BROKEN]. Thus, the [suspend] invocation that comes to
-     * this broken cell fails and also returns `false`. The typical patter is retrying
-     * both operations, the one that failed on [suspend] and the one that failed on [resume],
-     * from the beginning.
-     */
-    fun suspend(cont: Continuation<T>): Boolean = suspend(waiter = cont)
 
     /**
      * Tries to resume the next waiter and returns `true` if
