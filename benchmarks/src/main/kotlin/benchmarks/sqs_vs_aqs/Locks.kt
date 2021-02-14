@@ -5,17 +5,25 @@
 package benchmarks.sqs_vs_aqs
 
 import kotlinx.atomicfu.*
+import java.util.concurrent.locks.*
 
-private class QNode(released: Boolean = false) {
-    @Volatile
-    var released: Boolean = released
+private class QNode(resumed: Boolean = false) {
+    private val _thread = atomic<Any?>(if (resumed) Unit else null)
+    fun setCurThread() = _thread.compareAndSet(null, Thread.currentThread())
+    fun resumeThread() {
+        if (_thread.compareAndSet(null, Unit)) return
+        LockSupport.unpark(_thread.value as Thread)
+    }
+    fun cleanThread() {
+        _thread.value = null
+    }
 
     @Volatile
     var next: QNode? = null
 }
 
 internal class CLHLock {
-    private val tail = atomic(QNode(released = true))
+    private val tail = atomic(QNode(resumed = true))
     private val myPred = ThreadLocal<QNode>()
     private val myNode = ThreadLocal.withInitial { QNode() }
 
@@ -23,14 +31,16 @@ internal class CLHLock {
         val qnode = myNode.get()
         val pred = tail.getAndSet(qnode)
         myPred.set(pred)
-        while (!pred.released) { }
+        if (pred.setCurThread()) {
+            LockSupport.park()
+        }
     }
 
     fun unlock() {
         val qnode = myNode.get()
-        qnode.released = true
+        qnode.resumeThread()
         val pred = myPred.get()
-        pred.released = false
+        pred.cleanThread()
         myNode.set(myPred.get())
     }
 }
@@ -41,11 +51,13 @@ internal class MCSLock {
 
     fun lock() {
         val node = myNode.get()
-        node.released = false
+        node.cleanThread()
         val pred = tail.getAndSet(node)
         if (pred == null) return
         pred.next = node
-        while (!node.released) {}
+        if (node.setCurThread()) {
+            LockSupport.park()
+        }
     }
 
     fun unlock() {
@@ -54,7 +66,7 @@ internal class MCSLock {
             if (tail.compareAndSet(node, null)) return
             while (node.next == null) { }
         }
-        node.next!!.released = true
+        node.next!!.resumeThread()
         node.next = null
     }
 }

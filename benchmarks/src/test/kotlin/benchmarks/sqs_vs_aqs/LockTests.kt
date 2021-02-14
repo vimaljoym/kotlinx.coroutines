@@ -35,4 +35,4 @@ class LockTests {
     }
 }
 private val THREADS = 10
-private val N = 100_000
+private val N = 10_000
