@@ -9,11 +9,22 @@ import java.util.concurrent.locks.*
 
 private class QNode(resumed: Boolean = false) {
     private val _thread = atomic<Any?>(if (resumed) Unit else null)
-    fun setCurThread() = _thread.compareAndSet(null, Thread.currentThread())
+    private fun setCurThread() = _thread.compareAndSet(null, Thread.currentThread())
     fun resumeThread() {
-        if (_thread.compareAndSet(null, Unit)) return
-        LockSupport.unpark(_thread.value as Thread)
+        val t = _thread.getAndSet(Unit)
+        when (t) {
+            null -> return
+            is Thread -> LockSupport.unpark(t)
+            else -> error(t)
+        }
     }
+    fun await() {
+        if (!setCurThread()) return
+        do {
+            LockSupport.park()
+        } while (_thread.value !== Unit)
+    }
+
     fun cleanThread() {
         _thread.value = null
     }
@@ -29,12 +40,9 @@ internal class CLHLock {
 
     fun lock() {
         val qnode = myNode.get()
-        qnode.cleanThread()
         val pred = tail.getAndSet(qnode)
         myPred.set(pred)
-        if (pred.setCurThread()) {
-            LockSupport.park()
-        }
+        pred.await()
     }
 
     fun unlock() {
@@ -42,27 +50,25 @@ internal class CLHLock {
         qnode.resumeThread()
         val pred = myPred.get()
         pred.cleanThread()
-        myNode.set(myPred.get())
+        myNode.set(pred)
     }
 }
 
 internal class MCSLock {
     private val tail = atomic<QNode?>(null)
-    private val myNode = ThreadLocal.withInitial { QNode() }
+    private val threadNode = ThreadLocal.withInitial { QNode() }
 
     fun lock() {
-        val node = myNode.get()
+        val node = threadNode.get()
         node.cleanThread()
-        val pred = tail.getAndSet(node)
-        if (pred == null) return
-        pred.next = node
-        if (node.setCurThread()) {
-            LockSupport.park()
-        }
+        val curTail = tail.getAndSet(node)
+        if (curTail == null) return
+        curTail.next = node
+        node.await()
     }
 
     fun unlock() {
-        val node = myNode.get()
+        val node = threadNode.get()
         if (node.next == null) {
             if (tail.compareAndSet(node, null)) return
             while (node.next == null) { }

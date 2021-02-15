@@ -53,6 +53,12 @@ tasks.named<Jar>("jmhJar") {
     destinationDirectory.file("$rootDir")
 }
 
+tasks.withType<Test> {
+    maxParallelForks = 1
+    jvmArgs("--add-opens", "java.base/jdk.internal.misc=ALL-UNNAMED",
+        "--add-exports", "java.base/jdk.internal.util=ALL-UNNAMED")
+}
+
 dependencies {
     compile("org.openjdk.jmh:jmh-core:1.26")
     compile("io.projectreactor:reactor-core:${version("reactor")}")
@@ -61,6 +67,7 @@ dependencies {
 
     compile("com.typesafe.akka:akka-actor_2.12:2.5.0")
     compile(project(":kotlinx-coroutines-core"))
+    testImplementation("org.jetbrains.kotlinx:lincheck:${version("lincheck")}")
 
     // add jmh dependency on main
     "jmhImplementation"(sourceSets.main.get().runtimeClasspath)
